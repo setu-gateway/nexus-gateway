@@ -18,7 +18,7 @@ import { SetuClient } from "@setu/sdk";
 
 const client = new SetuClient({
   baseURL: "http://localhost:8000/v1",
-  apiKey: process.env.NEXUS_API_KEY,
+  apiKey: process.env.SETU_API_KEY,
 });
 
 const response = await client.chat.completions.create({

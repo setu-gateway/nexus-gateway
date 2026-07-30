@@ -10,7 +10,7 @@ def test_serve_playground_ui_endpoint():
     resp = client.get("/playground")
     assert resp.status_code == 200
     assert "text/html" in resp.headers["content-type"]
-    assert "Nexus Gateway — Provider Playground" in resp.text
+    assert "Setu Gateway — Provider Playground" in resp.text
     assert "button class=\"btn-submit\"" in resp.text
 
 

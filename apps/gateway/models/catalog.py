@@ -7,7 +7,7 @@ logger = get_logger("model_registry")
 
 
 class ModelDefinition(BaseModel):
-    """Unified Model Definition for Nexus Gateway catalog."""
+    """Unified Model Definition for Setu Gateway catalog."""
 
     model_id: str = Field(description="Unified model identifier used by clients")
     display_name: str = Field(description="Human readable display name")
@@ -21,7 +21,7 @@ class ModelDefinition(BaseModel):
 
 
 class ModelRegistry:
-    """Unified Model Catalog and Translation Registry for Nexus Gateway."""
+    """Unified Model Catalog and Translation Registry for Setu Gateway."""
 
     def __init__(self):
         self._catalog: Dict[str, ModelDefinition] = {}

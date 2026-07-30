@@ -79,7 +79,7 @@ PLAYGROUND_HTML_PAGE = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nexus Gateway — Provider Playground</title>
+    <title>Setu Gateway — Provider Playground</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -258,7 +258,7 @@ PLAYGROUND_HTML_PAGE = """<!DOCTYPE html>
 <body>
     <header>
         <div class="logo-title">
-            <span>⚡ Nexus Gateway</span>
+            <span>⚡ Setu Gateway</span>
             <span class="badge">Developer Playground</span>
         </div>
     </header>

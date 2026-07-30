@@ -15,7 +15,7 @@ class PluginContext(BaseModel):
 
 
 class BasePlugin(ABC):
-    """Abstract Base Class for Nexus Gateway Plugins."""
+    """Abstract Base Class for Setu Gateway Plugins."""
 
     name: str = "base_plugin"
     version: str = "0.1.0"

@@ -9,13 +9,13 @@ client = TestClient(app)
 
 
 def test_auth_full_lifecycle():
-    email = "testuser@nexus.io"
+    email = "testuser@setu.io"
     password = "securepassword123"
 
     # 1. Register User
     reg_resp = client.post(
         "/auth/register",
-        json={"email": email, "password": password, "organization_name": "Nexus Labs"},
+        json={"email": email, "password": password, "organization_name": "Setu Labs"},
     )
     assert reg_resp.status_code == 201
     user_data = reg_resp.json()
@@ -77,20 +77,20 @@ def test_auth_edge_cases():
     assert bad_email_resp.status_code in (400, 422)
 
     # Inactive User Login Rejection
-    _user_db_stub["inactive@nexus.io"] = {
+    _user_db_stub["inactive@setu.io"] = {
         "id": "inactive-id",
-        "email": "inactive@nexus.io",
+        "email": "inactive@setu.io",
         "password_hash": "$2b$12$abcdefghijklmnopqrstuv",
         "is_verified": False,
         "is_active": False,
         "organization_id": None,
     }
-    inactive_login = client.post("/auth/login", json={"email": "inactive@nexus.io", "password": "password"})
+    inactive_login = client.post("/auth/login", json={"email": "inactive@setu.io", "password": "password"})
     assert inactive_login.status_code in (401, 403)
 
     # Passing Refresh Token to /auth/me (should fail)
-    access_token = create_access_token({"sub": "user1", "email": "inactive@nexus.io"})
-    refresh_token = create_refresh_token({"sub": "user1", "email": "inactive@nexus.io"})
+    access_token = create_access_token({"sub": "user1", "email": "inactive@setu.io"})
+    refresh_token = create_refresh_token({"sub": "user1", "email": "inactive@setu.io"})
     
     me_with_refresh = client.get("/auth/me", headers={"Authorization": f"Bearer {refresh_token}"})
     assert me_with_refresh.status_code == 401

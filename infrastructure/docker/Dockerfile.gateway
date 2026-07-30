@@ -22,4 +22,4 @@ RUN uv sync --frozen || uv sync
 
 EXPOSE 8000
 
-CMD ["uv", "run", "python", "-m", "apps.gateway"]
+CMD ["uv", "run", "python", "-m", "apps.gateway.main"]

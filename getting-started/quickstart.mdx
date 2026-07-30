@@ -1,11 +1,11 @@
 ---
 title: "Quickstart"
-description: "Send your first API request through Nexus Gateway."
+description: "Send your first API request through Setu Gateway."
 ---
 
 # Quickstart Guide
 
-Follow this guide to send your first chat completion request through Nexus Gateway.
+Follow this guide to send your first chat completion request through Setu Gateway.
 
 ## Step 1: Set your Provider API Key
 
@@ -17,7 +17,7 @@ export OPENAI_API_KEY="your-openai-api-key"
 
 ## Step 2: Send a Request
 
-Send a request using cURL pointing to your Nexus Gateway instance:
+Send a request using cURL pointing to your Setu Gateway instance:
 
 ```bash
 curl http://localhost:8000/v1/chat/completions \
@@ -28,10 +28,10 @@ curl http://localhost:8000/v1/chat/completions \
     "messages": [
       {
         "role": "user",
-        "content": "Hello Nexus Gateway!"
+        "content": "Hello Setu Gateway!"
       }
     ]
   }'
 ```
 
-You will receive an OpenAI-compatible JSON response routed through Nexus Gateway.
+You will receive an OpenAI-compatible JSON response routed through Setu Gateway.

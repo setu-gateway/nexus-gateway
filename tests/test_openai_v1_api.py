@@ -25,7 +25,7 @@ def test_v1_chat_completions_non_streaming():
         "/v1/chat/completions",
         json={
             "model": "gpt-4o",
-            "messages": [{"role": "user", "content": "Hello Nexus Gateway"}],
+            "messages": [{"role": "user", "content": "Hello Setu Gateway"}],
             "temperature": 0.5,
         },
     )

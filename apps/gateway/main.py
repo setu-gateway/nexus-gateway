@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Nexus Gateway",
+    title="Setu Gateway",
     description="Enterprise-grade OpenAI-compatible AI Gateway",
     version="0.1.0",
     lifespan=lifespan,
