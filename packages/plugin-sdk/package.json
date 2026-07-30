@@ -1,0 +1,9 @@
+{
+  "name": "@setu/plugin-sdk",
+  "version": "0.1.0",
+  "description": "SDK and core interfaces for building Setu Gateway plugins",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "echo 'Building plugin SDK...'"
+  }
+}

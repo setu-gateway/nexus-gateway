@@ -1,0 +1,4 @@
+* @setu-gateway/maintainers
+/apps/gateway/ @setu-gateway/gateway-team
+/apps/dashboard/ @setu-gateway/frontend-team
+/infrastructure/ @setu-gateway/devops-team

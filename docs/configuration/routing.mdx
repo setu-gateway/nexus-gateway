@@ -1,0 +1,23 @@
+---
+title: "Routing Configuration"
+description: "Define model routing, fallbacks, and load balancing rules."
+---
+
+# Routing Rules
+
+Nexus Gateway supports flexible routing algorithms to optimize request cost, latency, and reliability.
+
+## Fallback Routing
+
+If a primary provider fails or returns a 5xx rate limit error, Nexus Gateway automatically fails over to configured backup models.
+
+```json
+{
+  "model": "gpt-4o",
+  "fallbacks": ["claude-3-5-sonnet-20241022", "gemini-1.5-pro"]
+}
+```
+
+## Load Balancing
+
+Distribute requests across multiple provider keys or deployment endpoints to avoid rate limit thresholds.

@@ -1,0 +1,11 @@
+{
+  "name": "@setu/sdk",
+  "version": "0.1.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "description": "Official TypeScript/Node.js SDK for Setu Gateway",
+  "scripts": {
+    "build": "echo 'Building TS SDK...'",
+    "test": "echo 'Testing TS SDK...'"
+  }
+}

@@ -1,0 +1,19 @@
+---
+title: "Images API"
+description: "OpenAI-compatible Image Generation endpoint spec."
+---
+
+# `POST /v1/images/generations`
+
+Generates images from a text prompt.
+
+## Request Body
+
+```json
+{
+  "model": "dall-e-3",
+  "prompt": "A futuristic city skyline at sunset with flying cars",
+  "n": 1,
+  "size": "1024x1024"
+}
+```

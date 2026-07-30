@@ -1,0 +1,9 @@
+{
+  "name": "@setu/shared",
+  "version": "0.1.0",
+  "description": "Shared data types, constants, and utilities for Setu Gateway",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "echo 'Building shared package...'"
+  }
+}

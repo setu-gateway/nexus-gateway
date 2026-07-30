@@ -1,0 +1,28 @@
+---
+title: "Models API"
+description: "List available LLM models and provider routes."
+---
+
+# `GET /v1/models`
+
+Lists all active model endpoints configured across providers in Nexus Gateway.
+
+## Response
+
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "gpt-4o",
+      "object": "model",
+      "owned_by": "openai"
+    },
+    {
+      "id": "claude-3-5-sonnet-20241022",
+      "object": "model",
+      "owned_by": "anthropic"
+    }
+  ]
+}
+```

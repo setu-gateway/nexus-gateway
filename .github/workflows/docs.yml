@@ -1,0 +1,28 @@
+name: Documentation CI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'docs/**'
+      - 'docs.json'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'docs/**'
+      - 'docs.json'
+
+jobs:
+  validate-docs:
+    name: Validate Mintlify Docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install Mintlify CLI
+        run: npm install -g mint
+      - name: Validate Mintlify Build
+        run: mint validate

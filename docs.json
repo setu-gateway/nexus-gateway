@@ -1,0 +1,92 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "name": "Setu",
+  "theme": "mint",
+  "colors": {
+    "primary": "#16A34A",
+    "light": "#07C983",
+    "dark": "#15803D"
+  },
+  "favicon": "/favicon.svg",
+  "navigation": {
+    "pages": [
+      {
+        "group": "Getting Started",
+        "pages": [
+          "getting-started/introduction",
+          "getting-started/installation",
+          "getting-started/quickstart"
+        ]
+      },
+      {
+        "group": "Configuration",
+        "pages": [
+          "configuration/environment",
+          "configuration/routing",
+          "configuration/authentication"
+        ]
+      },
+      {
+        "group": "Providers",
+        "pages": [
+          "providers/openai",
+          "providers/anthropic",
+          "providers/google",
+          "providers/ollama",
+          "providers/openrouter"
+        ]
+      },
+      {
+        "group": "Plugins",
+        "pages": [
+          "plugins/overview",
+          "plugins/creating-plugins",
+          "plugins/lifecycle"
+        ]
+      },
+      {
+        "group": "SDK",
+        "pages": [
+          "sdk/javascript",
+          "sdk/python",
+          "sdk/go"
+        ]
+      },
+      {
+        "group": "CLI",
+        "pages": [
+          "cli/installation",
+          "cli/commands"
+        ]
+      },
+      {
+        "group": "API",
+        "pages": [
+          "api/authentication",
+          "api/chat",
+          "api/embeddings",
+          "api/images",
+          "api/models"
+        ]
+      },
+      {
+        "group": "Architecture",
+        "pages": [
+          "architecture/overview",
+          "architecture/request-flow",
+          "architecture/caching",
+          "architecture/analytics"
+        ]
+      },
+      {
+        "group": "Contributing",
+        "pages": [
+          "contributing/contributing",
+          "contributing/development",
+          "contributing/code-style",
+          "contributing/release-process"
+        ]
+      }
+    ]
+  }
+}

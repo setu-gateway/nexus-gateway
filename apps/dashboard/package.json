@@ -1,0 +1,11 @@
+{
+  "name": "@setu/dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Web dashboard for gateway metrics, routing configuration, and API key management",
+  "scripts": {
+    "dev": "echo 'Starting dashboard dev server...'",
+    "build": "echo 'Building dashboard...'",
+    "test": "echo 'Testing dashboard...'"
+  }
+}

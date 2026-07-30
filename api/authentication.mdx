@@ -1,0 +1,14 @@
+---
+title: "API Authentication"
+description: "Authentication headers and security protocols for the REST API."
+---
+
+# REST API Authentication
+
+All requests to Nexus Gateway endpoints require authentication using standard HTTP Bearer headers:
+
+```http
+GET /v1/models HTTP/1.1
+Host: localhost:8000
+Authorization: Bearer <API_KEY>
+```

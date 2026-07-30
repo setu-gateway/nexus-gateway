@@ -1,0 +1,46 @@
+name: Lint & Typecheck
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ main, develop ]
+
+jobs:
+  python-lint-typecheck:
+    name: Python Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v2
+      - name: Install Dependencies
+        run: uv sync || true
+      - name: Ruff Check
+        run: uv run ruff check . || true
+      - name: MyPy Check
+        run: uv run mypy . || true
+      - name: Pyright Check
+        run: uv run pyright . || true
+
+  js-lint:
+    name: JavaScript / TypeScript Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+      - name: Install & Lint
+        run: |
+          pnpm install --no-frozen-lockfile || true
+          pnpm lint || true

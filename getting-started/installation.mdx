@@ -1,0 +1,36 @@
+---
+title: "Installation"
+description: "How to install and run Nexus Gateway locally or with Docker."
+---
+
+# Installing Nexus Gateway
+
+You can run Nexus Gateway using Docker Compose or directly from source.
+
+## Option 1: Docker Compose (Recommended)
+
+Run the following command to start the entire Gateway stack:
+
+```bash
+docker compose up -d
+```
+
+Verify that the Gateway is running on port `8000`:
+
+```bash
+curl http://localhost:8000/health
+```
+
+## Option 2: Run from Source
+
+1. Clone the repository and install Node.js / Python dependencies:
+
+```bash
+pnpm install
+```
+
+2. Start the gateway dev server:
+
+```bash
+pnpm dev
+```

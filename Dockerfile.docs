@@ -1,0 +1,11 @@
+FROM node:20-alpine as base
+
+WORKDIR /app
+
+RUN npm install -g mint
+
+COPY . .
+
+EXPOSE 3000
+
+CMD ["mint", "dev", "--port", "3000", "--host", "0.0.0.0"]

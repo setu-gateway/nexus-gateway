@@ -1,0 +1,37 @@
+---
+title: "Quickstart"
+description: "Send your first API request through Nexus Gateway."
+---
+
+# Quickstart Guide
+
+Follow this guide to send your first chat completion request through Nexus Gateway.
+
+## Step 1: Set your Provider API Key
+
+Configure your upstream provider API key in your environment:
+
+```bash
+export OPENAI_API_KEY="your-openai-api-key"
+```
+
+## Step 2: Send a Request
+
+Send a request using cURL pointing to your Nexus Gateway instance:
+
+```bash
+curl http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $OPENAI_API_KEY" \
+  -d '{
+    "model": "gpt-4o",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello Nexus Gateway!"
+      }
+    ]
+  }'
+```
+
+You will receive an OpenAI-compatible JSON response routed through Nexus Gateway.

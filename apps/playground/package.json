@@ -1,0 +1,10 @@
+{
+  "name": "@setu/playground",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Interactive API and prompt testing playground",
+  "scripts": {
+    "dev": "echo 'Starting playground...'",
+    "build": "echo 'Building playground...'"
+  }
+}
