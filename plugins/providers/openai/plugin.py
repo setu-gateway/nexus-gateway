@@ -13,16 +13,13 @@ from packages.plugin_sdk import (
 )
 from packages.shared.config.settings import load_settings
 from packages.shared.logging.logger import get_logger
+from packages.shared.network import execute_with_exponential_backoff
 
 logger = get_logger("openai_provider")
 
 
 class OpenAIProviderPlugin(ProviderPlugin):
-    """OpenAI Reference Provider Implementation.
-    
-    Supports Chat Completions, Vector Embeddings, SSE Streaming, Image Generation,
-    Audio Transcription, and Health/Models discovery.
-    """
+    """OpenAI Reference Provider Implementation with exponential backoff retries."""
 
     name: str = "OpenAI Reference Provider Adapter"
     provider_name: str = "openai"
@@ -39,12 +36,11 @@ class OpenAIProviderPlugin(ProviderPlugin):
         return headers
 
     async def chat(self, request: ChatRequest) -> Any:
-        """Send a chat completion request to OpenAI."""
+        """Send a chat completion request to OpenAI with exponential backoff retries for transient failures."""
         if request.stream:
             return self.stream_chat(request)
 
         if not self.api_key:
-            # Fallback mock response for offline/development execution
             logger.warning("No OPENAI_API_KEY configured. Returning fallback mock response.")
             return {
                 "id": "chatcmpl-openai-ref-mock",
@@ -67,10 +63,13 @@ class OpenAIProviderPlugin(ProviderPlugin):
         url = f"{self.base_url}/chat/completions"
         payload = request.model_dump(exclude_none=True)
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(url, json=payload, headers=self._get_headers())
-            resp.raise_for_status()
-            return resp.json()
+        async def _call_api():
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(url, json=payload, headers=self._get_headers())
+                resp.raise_for_status()
+                return resp.json()
+
+        return await execute_with_exponential_backoff(_call_api, provider_name=self.provider_name)
 
     async def stream_chat(self, request: ChatRequest) -> AsyncGenerator[str, None]:
         """Stream chat completions via Server-Sent Events (SSE)."""
@@ -119,10 +118,13 @@ class OpenAIProviderPlugin(ProviderPlugin):
         url = f"{self.base_url}/embeddings"
         payload = request.model_dump(exclude_none=True)
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(url, json=payload, headers=self._get_headers())
-            resp.raise_for_status()
-            return resp.json()
+        async def _call_embed():
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(url, json=payload, headers=self._get_headers())
+                resp.raise_for_status()
+                return resp.json()
+
+        return await execute_with_exponential_backoff(_call_embed, provider_name=self.provider_name)
 
     async def image(self, request: ImageRequest) -> Dict[str, Any]:
         """Generate images using OpenAI DALL-E."""

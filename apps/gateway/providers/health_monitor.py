@@ -16,10 +16,13 @@ class ProviderHealthMetric(BaseModel):
     provider_name: str
     status: str = "online"  # "online", "degraded", "offline"
     latency_ms: Optional[float] = 0.0
+    success_rate: float = 100.0  # 0.0 - 100.0%
+    error_rate: float = 0.0  # 0.0 - 100.0%
     availability_score: float = 100.0  # 0.0 - 100.0%
-    error_rate: float = 0.0  # 0.0 - 1.0
     total_requests: int = 0
     total_errors: int = 0
+    total_successes: int = 0
+    last_successful_request: Optional[datetime] = None
     rate_limit_remaining: Optional[int] = 1000
     is_rate_limited: bool = False
     last_checked_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -48,29 +51,36 @@ class ProviderHealthMonitor:
         latency_ms: float,
         is_rate_limit: bool = False,
     ) -> None:
-        """Record real-time execution outcome for dynamic error rate and rate limit tracking."""
+        """Record real-time execution outcome for dynamic error/success rate and rate limit tracking."""
         key = provider_name.lower()
         metric = self.get_metrics(key)
+        now = datetime.now(timezone.utc)
 
         metric.total_requests += 1
         metric.latency_ms = round((metric.latency_ms + latency_ms) / 2, 2) if metric.latency_ms else latency_ms
-        metric.last_checked_at = datetime.now(timezone.utc)
+        metric.last_checked_at = now
 
-        if not success:
+        if success:
+            metric.total_successes += 1
+            metric.last_successful_request = now
+        else:
             metric.total_errors += 1
+
         if is_rate_limit:
             metric.is_rate_limited = True
             metric.status = "degraded"
         else:
             metric.is_rate_limited = False
 
-        # Calculate error rate & availability score
-        metric.error_rate = round(metric.total_errors / metric.total_requests, 3)
-        metric.availability_score = round(max(0.0, 100.0 - (metric.error_rate * 100.0)), 2)
+        # Calculate error rate & success rate
+        err_fraction = metric.total_errors / metric.total_requests
+        metric.error_rate = round(err_fraction * 100.0, 2)
+        metric.success_rate = round(100.0 - metric.error_rate, 2)
+        metric.availability_score = metric.success_rate
 
-        if metric.error_rate > 0.5:
+        if metric.error_rate > 50.0:
             metric.status = "offline"
-        elif metric.error_rate > 0.1 or metric.is_rate_limited:
+        elif metric.error_rate > 10.0 or metric.is_rate_limited:
             metric.status = "degraded"
         else:
             metric.status = "online"
@@ -84,7 +94,7 @@ class ProviderHealthMonitor:
             metric.last_checked_at = datetime.now(timezone.utc)
 
             if response.status == "ok":
-                metric.status = "online" if metric.error_rate < 0.1 else metric.status
+                metric.status = "online" if metric.error_rate < 10.0 else metric.status
                 if response.latency_ms is not None:
                     metric.latency_ms = response.latency_ms
             elif response.status == "degraded":
@@ -109,7 +119,6 @@ class ProviderHealthMonitor:
         if not eligible:
             return None
 
-        # Sort by lowest error rate, then lowest latency
         eligible.sort(key=lambda x: (x[1], x[2]))
         return eligible[0][0]
 

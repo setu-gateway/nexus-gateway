@@ -73,7 +73,7 @@ class OllamaProviderPlugin(ProviderPlugin):
                     },
                 }
         except Exception as e:
-            logger.warning(f"Ollama server unreachable at {self.base_url}. Yielding mock response ({e}).")
+            logger.warning(f"Ollama server unreachable at {self.base_url}. Yielding mock response ({str(e)}).")
             return {
                 "id": "chatcmpl-ollama-fallback",
                 "object": "chat.completion",

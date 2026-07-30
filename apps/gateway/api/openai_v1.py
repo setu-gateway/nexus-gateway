@@ -31,22 +31,46 @@ class OpenAIRequest(BaseModel):
 
 @router.get("/models")
 async def list_v1_models() -> Dict[str, Any]:
-    """List available models in OpenAI API format."""
+    """List available models in OpenAI API format, including dynamically discovered local Ollama models."""
     models_list = model_registry.list_models()
+    formatted_models = [
+        {
+            "id": m.model_id,
+            "object": "model",
+            "created": 1600000000,
+            "owned_by": m.provider_name,
+            "permission": [],
+            "root": m.provider_model_id,
+            "parent": None,
+        }
+        for m in models_list
+    ]
+
+    # Dynamically query Ollama for locally installed pulled models
+    ollama_provider = provider_registry.get_provider("ollama")
+    if ollama_provider:
+        try:
+            ollama_models = await ollama_provider.models()
+            existing_ids = {m["id"] for m in formatted_models}
+            for o_model in ollama_models.models:
+                if o_model not in existing_ids:
+                    formatted_models.append(
+                        {
+                            "id": o_model,
+                            "object": "model",
+                            "created": int(time.time()),
+                            "owned_by": "ollama",
+                            "permission": [],
+                            "root": o_model,
+                            "parent": None,
+                        }
+                    )
+        except Exception:
+            pass
+
     return {
         "object": "list",
-        "data": [
-            {
-                "id": m.model_id,
-                "object": "model",
-                "created": 1600000000,
-                "owned_by": m.provider_name,
-                "permission": [],
-                "root": m.provider_model_id,
-                "parent": None,
-            }
-            for m in models_list
-        ],
+        "data": formatted_models,
     }
 
 

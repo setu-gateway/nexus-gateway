@@ -7,15 +7,17 @@ from apps.gateway.main import app
 client = TestClient(app)
 
 
-def test_v1_models_endpoint():
+def test_v1_models_endpoint_includes_ollama_local_models():
     resp = client.get("/v1/models")
     assert resp.status_code == 200
     data = resp.json()
     assert data["object"] == "list"
     assert len(data["data"]) >= 5
+
     model_ids = [m["id"] for m in data["data"]]
     assert "gpt-4o" in model_ids
     assert "claude-3-5-sonnet" in model_ids
+    assert any("llama" in m["id"].lower() for m in data["data"])
 
 
 def test_v1_chat_completions_non_streaming():
@@ -66,11 +68,9 @@ def test_v1_embeddings_endpoint():
 
 
 def test_v1_chat_completions_validation_and_errors():
-    # Missing messages field
     no_msg = client.post("/v1/chat/completions", json={"model": "gpt-4o"})
     assert no_msg.status_code == 400
 
-    # Missing input field in embeddings
     no_input = client.post("/v1/embeddings", json={"model": "text-embedding-3-small"})
     assert no_input.status_code == 400
 
