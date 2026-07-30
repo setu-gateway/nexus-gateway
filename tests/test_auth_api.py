@@ -1,8 +1,14 @@
 from fastapi.testclient import TestClient
 import pytest
 
-from apps.gateway.api.auth import _user_db_stub
-from apps.gateway.auth.security import create_access_token, create_refresh_token, decode_token, validate_email_address
+from apps.gateway.auth.security import (
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+    hash_password,
+    validate_email_address,
+)
+from apps.gateway.db.models import User
 from apps.gateway.main import app
 
 client = TestClient(app)
@@ -68,7 +74,7 @@ def test_auth_full_lifecycle():
     assert me_after_logout.status_code == 401
 
 
-def test_auth_edge_cases():
+async def test_auth_edge_cases(db_session):
     # Invalid Email format
     bad_email_resp = client.post(
         "/auth/register",
@@ -77,14 +83,16 @@ def test_auth_edge_cases():
     assert bad_email_resp.status_code in (400, 422)
 
     # Inactive User Login Rejection
-    _user_db_stub["inactive@setu.io"] = {
-        "id": "inactive-id",
-        "email": "inactive@setu.io",
-        "password_hash": "$2b$12$abcdefghijklmnopqrstuv",
-        "is_verified": False,
-        "is_active": False,
-        "organization_id": None,
-    }
+    db_session.add(
+        User(
+            email="inactive@setu.io",
+            password_hash=hash_password("password"),
+            is_verified=False,
+            is_active=False,
+        )
+    )
+    await db_session.commit()
+
     inactive_login = client.post("/auth/login", json={"email": "inactive@setu.io", "password": "password"})
     assert inactive_login.status_code in (401, 403)
 

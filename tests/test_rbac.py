@@ -66,3 +66,28 @@ async def test_require_role_dependency():
     with pytest.raises(HTTPException) as exc_info:
         await role_checker(current_user_role="admin")
     assert exc_info.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_require_role_is_a_minimum_not_an_exact_match():
+    # A route gated to the "developer" minimum should also admit higher-ranked roles.
+    developer_gate = require_role(Role.DEVELOPER)
+    await developer_gate(current_user_role="owner")
+    await developer_gate(current_user_role="admin")
+    await developer_gate(current_user_role="developer")
+
+    # Viewer is below the "developer" minimum and should still be rejected.
+    with pytest.raises(HTTPException) as exc_info:
+        await developer_gate(current_user_role="viewer")
+    assert exc_info.value.status_code == 403
+
+    # Unknown/garbage role strings must fail closed, not raise a KeyError.
+    with pytest.raises(HTTPException):
+        await developer_gate(current_user_role="not-a-real-role")
+
+
+def test_billing_and_security_roles_exist_per_rfc_0003():
+    assert has_permission(Role.BILLING, Permission.MANAGE_BILLING) is True
+    assert has_permission(Role.BILLING, Permission.DELETE_PROJECT) is False
+    assert has_permission(Role.SECURITY, Permission.MANAGE_SETTINGS) is True
+    assert has_permission(Role.SECURITY, Permission.MANAGE_BILLING) is False

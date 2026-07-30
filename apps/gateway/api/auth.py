@@ -3,6 +3,8 @@ import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.gateway.auth.security import (
     create_access_token,
@@ -12,12 +14,21 @@ from apps.gateway.auth.security import (
     validate_email_address,
     verify_password,
 )
+from apps.gateway.db.models import Organization, Project, User
+from apps.gateway.db.session import get_db_session
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-# In-memory store stub for user accounts (syncs with Database models in full execution)
-_user_db_stub: dict = {}
+# Access/refresh tokens are short-lived JWTs; blacklisting revoked ones in-memory (rather
+# than in Postgres) is an intentional, separate trade-off from user persistence below -
+# it means logout/refresh revocation doesn't survive a restart or replicate across
+# gateway instances yet. Tracked as a known follow-up, not fixed here.
 _token_blacklist: set = set()
+
+
+def _slugify(name: str) -> str:
+    """Generate a clean URL slug from an organization name."""
+    return "".join(c if c.isalnum() else "-" for c in name.lower()).strip("-") or "org"
 
 
 class UserRegisterRequest(BaseModel):
@@ -50,61 +61,74 @@ class UserResponse(BaseModel):
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def register(req: UserRegisterRequest) -> UserResponse:
-    """Register a new user account."""
+async def register(
+    req: UserRegisterRequest, db: AsyncSession = Depends(get_db_session)
+) -> UserResponse:
+    """Register a new user account with a personal organization and default project."""
     if not validate_email_address(req.email):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid email address format",
         )
 
-    if req.email.lower() in _user_db_stub:
+    email = req.email.lower()
+    existing = await db.execute(select(User).where(User.email == email))
+    if existing.scalar_one_or_none() is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="User with this email already exists",
         )
 
-    user_id = str(uuid.uuid4())
-    org_id = str(uuid.uuid4())
-    hashed_pwd = hash_password(req.password)
-
-    user_record = {
-        "id": user_id,
-        "email": req.email.lower(),
-        "password_hash": hashed_pwd,
-        "is_verified": False,
-        "is_active": True,
-        "organization_id": org_id,
-    }
-
-    _user_db_stub[req.email.lower()] = user_record
-
-    return UserResponse(
-        id=user_id,
-        email=req.email.lower(),
+    org_name = req.organization_name or "Personal Organization"
+    organization = Organization(
+        id=uuid.uuid4(),
+        name=org_name,
+        slug=f"{_slugify(org_name)}-{uuid.uuid4().hex[:8]}",
+        plan="free",
+    )
+    project = Project(
+        id=uuid.uuid4(),
+        name="Default Project",
+        organization_id=organization.id,
+    )
+    user = User(
+        id=uuid.uuid4(),
+        email=email,
+        password_hash=hash_password(req.password),
         is_verified=False,
         is_active=True,
-        organization_id=org_id,
+        organization_id=organization.id,
+    )
+    db.add_all([organization, project, user])
+
+    return UserResponse(
+        id=str(user.id),
+        email=user.email,
+        is_verified=user.is_verified,
+        is_active=user.is_active,
+        organization_id=str(organization.id),
     )
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(req: UserLoginRequest) -> TokenResponse:
+async def login(req: UserLoginRequest, db: AsyncSession = Depends(get_db_session)) -> TokenResponse:
     """Authenticate credentials and issue JWT Access and Refresh Tokens."""
-    user = _user_db_stub.get(req.email.lower())
-    if not user or not verify_password(req.password, user["password_hash"]):
+    result = await db.execute(select(User).where(User.email == req.email.lower()))
+    user = result.scalar_one_or_none()
+
+    if not user or not verify_password(req.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
 
-    if not user["is_active"]:
+    if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is inactive",
         )
 
-    token_data = {"sub": user["id"], "email": user["email"]}
+    token_data = {"sub": str(user.id), "email": user.email}
     access_token = create_access_token(token_data)
     refresh_token = create_refresh_token(token_data)
 
@@ -164,7 +188,9 @@ async def logout(authorization: Optional[str] = Header(None)) -> dict:
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_current_user(authorization: Optional[str] = Header(None)) -> UserResponse:
+async def get_current_user(
+    authorization: Optional[str] = Header(None), db: AsyncSession = Depends(get_db_session)
+) -> UserResponse:
     """Retrieve details for currently authenticated user."""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(
@@ -188,7 +214,8 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> UserR
             )
 
         email = payload.get("email")
-        user = _user_db_stub.get(email)
+        result = await db.execute(select(User).where(User.email == email))
+        user = result.scalar_one_or_none()
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -196,11 +223,11 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> UserR
             )
 
         return UserResponse(
-            id=user["id"],
-            email=user["email"],
-            is_verified=user["is_verified"],
-            is_active=user["is_active"],
-            organization_id=user["organization_id"],
+            id=str(user.id),
+            email=user.email,
+            is_verified=user.is_verified,
+            is_active=user.is_active,
+            organization_id=str(user.organization_id) if user.organization_id else None,
         )
     except ValueError as e:
         raise HTTPException(
