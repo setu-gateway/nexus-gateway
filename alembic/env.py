@@ -7,7 +7,7 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from apps.gateway.db.session import Base
+from apps.gateway.db.base import Base
 
 config = context.config
 
