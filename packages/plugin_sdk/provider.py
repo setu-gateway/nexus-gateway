@@ -1,4 +1,3 @@
-from packages.plugin_sdk.src.plugin import BasePlugin, PluginContext
 from packages.plugin_sdk.src.provider import (
     AudioRequest,
     ChatRequest,
@@ -10,8 +9,6 @@ from packages.plugin_sdk.src.provider import (
 )
 
 __all__ = [
-    "BasePlugin",
-    "PluginContext",
     "ProviderPlugin",
     "ChatRequest",
     "EmbeddingRequest",
