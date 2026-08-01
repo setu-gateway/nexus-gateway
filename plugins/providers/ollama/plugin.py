@@ -14,8 +14,16 @@ from packages.plugin_sdk import (
     ProviderPlugin,
 )
 from packages.shared.logging.logger import get_logger
+from packages.shared.network import retry_provider_call
 
 logger = get_logger("ollama_provider")
+
+# Only "can't reach the daemon at all" gets the friendly local-dev mock fallback below -
+# an active connection that errors (bad request, model not found, persistent 5xx after
+# retries) propagates instead, so health_monitor/the router see the real failure rather
+# than a silent fake success (Epic 4.4: a retry engine is pointless if the wrapped call
+# never actually raises).
+_CONNECTION_UNAVAILABLE_ERRORS = (httpx.ConnectError, httpx.ConnectTimeout)
 
 
 class OllamaProviderPlugin(ProviderPlugin):
@@ -44,35 +52,15 @@ class OllamaProviderPlugin(ProviderPlugin):
         if request.top_p is not None:
             payload["options"]["top_p"] = request.top_p
 
-        try:
+        async def _call_api():
             async with httpx.AsyncClient(timeout=30.0) as client:
                 resp = await client.post(url, json=payload)
                 resp.raise_for_status()
-                ollama_data = resp.json()
+                return resp.json()
 
-                # Translate Ollama response format into OpenAI-compatible format
-                return {
-                    "id": f"chatcmpl-ollama-{int(time.time())}",
-                    "object": "chat.completion",
-                    "created": int(time.time()),
-                    "model": request.model,
-                    "choices": [
-                        {
-                            "index": 0,
-                            "message": {
-                                "role": ollama_data.get("message", {}).get("role", "assistant"),
-                                "content": ollama_data.get("message", {}).get("content", ""),
-                            },
-                            "finish_reason": "stop" if ollama_data.get("done") else None,
-                        }
-                    ],
-                    "usage": {
-                        "prompt_tokens": ollama_data.get("prompt_eval_count", 0),
-                        "completion_tokens": ollama_data.get("eval_count", 0),
-                        "total_tokens": ollama_data.get("prompt_eval_count", 0) + ollama_data.get("eval_count", 0),
-                    },
-                }
-        except Exception as e:
+        try:
+            ollama_data = await retry_provider_call(_call_api, provider_name=self.provider_name)
+        except _CONNECTION_UNAVAILABLE_ERRORS as e:
             logger.warning(f"Ollama server unreachable at {self.base_url}. Yielding mock response ({str(e)}).")
             return {
                 "id": "chatcmpl-ollama-fallback",
@@ -91,6 +79,29 @@ class OllamaProviderPlugin(ProviderPlugin):
                 ],
             }
 
+        # Translate Ollama response format into OpenAI-compatible format
+        return {
+            "id": f"chatcmpl-ollama-{int(time.time())}",
+            "object": "chat.completion",
+            "created": int(time.time()),
+            "model": request.model,
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": ollama_data.get("message", {}).get("role", "assistant"),
+                        "content": ollama_data.get("message", {}).get("content", ""),
+                    },
+                    "finish_reason": "stop" if ollama_data.get("done") else None,
+                }
+            ],
+            "usage": {
+                "prompt_tokens": ollama_data.get("prompt_eval_count", 0),
+                "completion_tokens": ollama_data.get("eval_count", 0),
+                "total_tokens": ollama_data.get("prompt_eval_count", 0) + ollama_data.get("eval_count", 0),
+            },
+        }
+
     async def stream_chat(self, request: ChatRequest) -> AsyncGenerator[str, None]:
         """Stream chat completions via Server-Sent Events (SSE)."""
         url = f"{self.base_url}/api/chat"
@@ -100,6 +111,7 @@ class OllamaProviderPlugin(ProviderPlugin):
             "stream": True,
         }
 
+        any_real_chunk_sent = False
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
                 async with client.stream("POST", url, json=payload) as resp:
@@ -123,11 +135,17 @@ class OllamaProviderPlugin(ProviderPlugin):
                                     }
                                 ],
                             }
+                            any_real_chunk_sent = True
                             yield f"data: {json.dumps(event)}\n\n"
                             if is_done:
                                 break
                     yield "data: [DONE]\n\n"
-        except Exception:
+        except _CONNECTION_UNAVAILABLE_ERRORS:
+            # Only fall back to a fake stream for "never got started" failures - once
+            # real content has already gone out, blending in mock chunks after it would
+            # silently corrupt the response instead of just ending it.
+            if any_real_chunk_sent:
+                raise
             # Fallback stream when server is offline
             mock_chunks = ["Ollama ", "Local ", "Streaming ", "Response"]
             for i, chunk in enumerate(mock_chunks):
@@ -153,18 +171,21 @@ class OllamaProviderPlugin(ProviderPlugin):
         prompt_text = request.input[0] if isinstance(request.input, list) else request.input
         payload = {"model": request.model, "prompt": prompt_text}
 
-        try:
+        async def _call_embed():
             async with httpx.AsyncClient(timeout=30.0) as client:
                 resp = await client.post(url, json=payload)
                 resp.raise_for_status()
-                data = resp.json()
-                embedding = data.get("embedding", [0.01, 0.02, 0.03])
-                return {
-                    "object": "list",
-                    "data": [{"object": "embedding", "embedding": embedding, "index": 0}],
-                    "model": request.model,
-                }
-        except Exception:
+                return resp.json()
+
+        try:
+            data = await retry_provider_call(_call_embed, provider_name=self.provider_name)
+            embedding = data.get("embedding", [0.01, 0.02, 0.03])
+            return {
+                "object": "list",
+                "data": [{"object": "embedding", "embedding": embedding, "index": 0}],
+                "model": request.model,
+            }
+        except _CONNECTION_UNAVAILABLE_ERRORS:
             return {
                 "object": "list",
                 "data": [{"object": "embedding", "embedding": [0.05, 0.06, 0.07], "index": 0}],

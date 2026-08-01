@@ -3,6 +3,7 @@ import httpx
 import pytest
 
 from packages.plugin_sdk import AudioRequest, ChatRequest, EmbeddingRequest, ImageRequest
+from packages.shared.network import ProviderRetrySetting, RetryConfig
 from plugins.providers.ollama.plugin import OllamaProviderPlugin
 from plugins.providers.openai.plugin import OpenAIProviderPlugin
 
@@ -82,24 +83,46 @@ async def test_ollama_provider_full_mocked_calls():
 
 
 @pytest.mark.asyncio
-async def test_ollama_provider_error_fallbacks():
+async def test_ollama_provider_connection_unavailable_falls_back_to_mock():
+    """When the local daemon can't be reached at all, chat()/embeddings() should
+    degrade gracefully to a mock response rather than error out on every dev machine
+    that doesn't happen to have Ollama running."""
+    provider = OllamaProviderPlugin(base_url="http://localhost:11434")
+
+    with patch("httpx.AsyncClient.post", side_effect=httpx.ConnectError("Connection refused")), patch(
+        "httpx.AsyncClient.get", side_effect=httpx.ConnectError("Connection refused")
+    ):
+        chat_res = await provider.chat(ChatRequest(model="llama3.2", messages=[{"role": "user", "content": "hi"}]))
+        assert "ollama" in chat_res["choices"][0]["message"]["content"].lower()
+
+        emb_res = await provider.embeddings(EmbeddingRequest(model="llama3.2", input="test"))
+        assert "data" in emb_res
+
+        health_res = await provider.health()
+        assert health_res.status == "offline"
+
+        models_res = await provider.models()
+        assert len(models_res.models) > 0
+
+
+@pytest.mark.asyncio
+async def test_ollama_provider_real_error_after_connecting_is_not_masked():
+    """Epic 4.4: once a connection to Ollama succeeds, a genuine server-side error
+    (not "unreachable") must propagate instead of silently becoming a fake success -
+    otherwise health_monitor/the router can never see that this provider is failing."""
     provider = OllamaProviderPlugin(base_url="http://localhost:11434")
 
     mock_err_resp = MagicMock()
     mock_err_resp.status_code = 500
-    mock_err_resp.raise_for_status = MagicMock(side_effect=httpx.HTTPStatusError("500 Server Error", request=MagicMock(), response=mock_err_resp))
+    mock_err_resp.raise_for_status = MagicMock(
+        side_effect=httpx.HTTPStatusError("500 Server Error", request=MagicMock(), response=mock_err_resp)
+    )
 
-    with patch("httpx.AsyncClient.post", return_value=mock_err_resp), patch("httpx.AsyncClient.get", side_effect=RuntimeError("Ollama offline")):
-        chat_res = await provider.chat(ChatRequest(model="llama3.2", messages=[{"role": "user", "content": "hi"}]))
-        assert "unreachable" in chat_res["choices"][0]["message"]["content"].lower() or "ollama" in chat_res["choices"][0]["message"]["content"].lower()
+    fast_retry_config = RetryConfig(default=ProviderRetrySetting(max_retries=0, initial_backoff_sec=0.01))
 
-        try:
-            await provider.embeddings(EmbeddingRequest(model="llama3.2", input="test"))
-        except Exception:
-            pass
-
-        health_res = await provider.health()
-        assert health_res.status in ("degraded", "offline")
-
-        models_res = await provider.models()
-        assert len(models_res.models) > 0
+    with (
+        patch("httpx.AsyncClient.post", return_value=mock_err_resp),
+        patch("packages.shared.network.retry.load_retry_config", return_value=fast_retry_config),
+        pytest.raises(httpx.HTTPStatusError),
+    ):
+        await provider.chat(ChatRequest(model="llama3.2", messages=[{"role": "user", "content": "hi"}]))

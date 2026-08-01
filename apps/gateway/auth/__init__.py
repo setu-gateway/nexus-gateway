@@ -4,6 +4,7 @@ from apps.gateway.auth.api_key import (
     mask_api_key,
     verify_api_key,
 )
+from apps.gateway.auth.context import RequestAuthContext, resolve_api_key
 from apps.gateway.auth.rbac import (
     Permission,
     ROLE_PERMISSIONS,
@@ -38,4 +39,6 @@ __all__ = [
     "has_permission",
     "require_permission",
     "require_role",
+    "RequestAuthContext",
+    "resolve_api_key",
 ]

@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 import uvicorn
 
+from apps.gateway.api.analytics import router as analytics_router
 from apps.gateway.api.auth import router as auth_router
 from apps.gateway.api.health import router as health_router
 from apps.gateway.api.keys import router as api_key_router
@@ -11,6 +12,8 @@ from apps.gateway.api.organizations import router as organization_router
 from apps.gateway.api.playground_api import router as playground_router
 from apps.gateway.api.projects import router as project_router
 from apps.gateway.api.providers_api import router as providers_management_router
+from apps.gateway.api.routing_rules import router as routing_rules_router
+from apps.gateway.api.routing_tools import router as routing_tools_router
 from apps.gateway.redis.client import close_redis_connection
 from packages.shared.config.settings import load_settings
 from packages.shared.logging.logger import get_logger, setup_structured_logging
@@ -44,6 +47,9 @@ app.include_router(openai_v1_router)
 app.include_router(providers_management_router)
 app.include_router(unified_models_router)
 app.include_router(playground_router)
+app.include_router(routing_rules_router)
+app.include_router(routing_tools_router)
+app.include_router(analytics_router)
 
 
 def start():

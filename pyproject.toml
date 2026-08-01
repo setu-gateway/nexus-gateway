@@ -2,6 +2,14 @@
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.wheel]
+# The importable code lives at the repo root under apps/, packages/, plugins/ (imported
+# as apps.gateway.*, packages.shared.*, plugins.providers.*, etc.) rather than a single
+# src/setu_gateway/ directory, so hatchling's default file-selection heuristic can't
+# infer what to ship - without this, `uv sync` fails outright (including inside the
+# gateway's own Docker build), since installing the project is part of a normal sync.
+packages = ["apps", "packages", "plugins"]
+
 [project]
 name = "setu-gateway"
 version = "0.1.0"
@@ -25,6 +33,9 @@ dependencies = [
     "bcrypt>=4.0.0",
     "email-validator>=2.0.0",
 ]
+
+[project.scripts]
+setu = "packages.cli.main:main"
 
 [project.optional-dependencies]
 dev = [
@@ -52,12 +63,14 @@ dev-dependencies = [
     "aiosqlite>=0.19.0",
 ]
 
-[tool.uv.workspace]
-members = [
-    "apps/*",
-    "packages/*",
-    "plugins/*",
-]
+# Note: this is intentionally NOT a uv workspace. apps/gateway, packages/shared,
+# packages/plugin_sdk, packages/cli, and plugins/* are plain Python subpackages of this
+# one project (imported as apps.gateway.*, packages.shared.*, etc.), not independent
+# packages with their own pyproject.toml - a prior `[tool.uv.workspace]` declaration
+# here globbed apps/*, packages/*, plugins/* expecting every match to have one, which
+# broke `uv sync` entirely (including the gateway's own Docker build) since only
+# packages/sdk-python does. That one is a genuinely separate, independently
+# publishable client SDK - `cd packages/sdk-python && uv sync` there on its own.
 
 # Formatting & Linting Configuration
 [tool.ruff]

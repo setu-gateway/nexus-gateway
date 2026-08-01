@@ -12,3 +12,8 @@ Available commands for managing your Setu Gateway instance:
 - `setu keys list`: List active API keys.
 - `setu keys create`: Provision a new API key.
 - `setu logs`: Stream request and system logs.
+- `setu benchmark`: Compare provider latency, throughput, streaming time-to-first-chunk, and error rate against a running gateway (Epic 4.10). Flags: `--url`, `--providers`, `--requests`, `--concurrency`, `--stream`, `--prompt`.
+
+```bash
+setu benchmark --providers openai,gemini,groq --requests 20 --concurrency 5
+```

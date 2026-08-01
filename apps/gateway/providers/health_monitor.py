@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 import asyncio
+import math
 from pydantic import BaseModel, Field
 
 from apps.gateway.providers.registry import ProviderRegistry
@@ -26,6 +27,23 @@ class ProviderHealthMetric(BaseModel):
     rate_limit_remaining: Optional[int] = 1000
     is_rate_limited: bool = False
     last_checked_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    def trust_score(self) -> float:
+        """Composite 0-100 trust score blending success rate and latency, used by the
+        router to rank candidates. Offline providers score 0 regardless of history;
+        degraded ones are penalized. Latency is a smooth exponential decay rather than a
+        hard cutoff, since a couple hundred extra ms shouldn't cliff-edge a provider from
+        "trusted" to "not"."""
+        if self.status == "offline":
+            return 0.0
+
+        latency_score = 100.0 * math.exp(-(self.latency_ms or 0.0) / 1000.0)
+        raw = (0.7 * self.success_rate) + (0.3 * latency_score)
+
+        if self.status == "degraded":
+            raw *= 0.5
+
+        return round(max(0.0, min(100.0, raw)), 1)
 
 
 class ProviderHealthMonitor:
@@ -104,6 +122,10 @@ class ProviderHealthMonitor:
 
         logger.info(f"Health check round completed for {len(health_responses)} providers.")
         return self._metrics
+
+    def get_trust_score(self, provider_name: str) -> float:
+        """Convenience accessor: current trust score for a single provider."""
+        return self.get_metrics(provider_name).trust_score()
 
     def get_healthiest_provider(self, candidates: List[str]) -> Optional[str]:
         """Select the healthiest provider from candidates based on status, error rate, and latency."""

@@ -1,12 +1,29 @@
 import asyncio
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 import httpx
 
 from packages.shared.logging.logger import get_logger
+from packages.shared.network.retry_config import RetryConfig, load_retry_config
 
 logger = get_logger("retry_handler")
 
 TRANSIENT_STATUS_CODES = {429, 500, 502, 503, 504}
+
+
+async def retry_provider_call(func: Callable[[], Any], provider_name: str, config: Optional[RetryConfig] = None) -> Any:
+    """Provider-aware retry (Epic 4.4): resolves per-provider max_retries/backoff from
+    RetryConfig, then delegates to execute_with_exponential_backoff. This is the
+    entrypoint provider plugins should use instead of calling
+    execute_with_exponential_backoff directly, so retry tuning lives in one place
+    (retry.yaml / RETRY_* env vars) rather than being hardcoded per plugin."""
+    settings = (config or load_retry_config()).for_provider(provider_name)
+    return await execute_with_exponential_backoff(
+        func,
+        max_retries=settings.max_retries,
+        initial_backoff_sec=settings.initial_backoff_sec,
+        backoff_factor=settings.backoff_factor,
+        provider_name=provider_name,
+    )
 
 
 async def execute_with_exponential_backoff(

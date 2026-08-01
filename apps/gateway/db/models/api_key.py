@@ -24,9 +24,12 @@ class APIKey(Base):
     project_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
     )
+    name: Mapped[str] = mapped_column(String(255), default="Default Key", nullable=False)
     hashed_key: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    masked_key: Mapped[str] = mapped_column(String(50), nullable=False)
     last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     project: Mapped["Project"] = relationship("Project", back_populates="api_keys")

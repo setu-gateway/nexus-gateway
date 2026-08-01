@@ -1,11 +1,14 @@
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
+import pytest
 import pytest_asyncio
 
 from apps.gateway.db import models  # noqa: F401 - registers all tables on Base.metadata
+from apps.gateway.db import session as db_session_module
 from apps.gateway.db.base import Base
 from apps.gateway.db.session import get_db_session
 from apps.gateway.main import app
+from apps.gateway.providers.instance import health_monitor, routing_engine
 
 test_engine = create_async_engine(
     "sqlite+aiosqlite:///:memory:",
@@ -13,6 +16,12 @@ test_engine = create_async_engine(
     connect_args={"check_same_thread": False},
 )
 TestSessionLocal = async_sessionmaker(bind=test_engine, class_=AsyncSession, expire_on_commit=False)
+
+# Patched at the module attribute level (not just via dependency_overrides below) so
+# that code which opens its own session directly - e.g. apps/gateway/analytics/recorder.py,
+# which deliberately does NOT ride the request-scoped session (see its docstring) - also
+# lands on the test database instead of trying to reach a real Postgres.
+db_session_module.async_session_factory = TestSessionLocal
 
 
 async def _get_test_db_session():
@@ -49,3 +58,17 @@ async def db_session():
     """Direct DB session for tests that need to set up rows the API can't create."""
     async with TestSessionLocal() as session:
         yield session
+
+
+@pytest.fixture(autouse=True)
+def _reset_provider_health_state():
+    """provider_registry/health_monitor/routing_engine are process-wide singletons
+    (apps/gateway/providers/instance.py) shared by every request - and every test.
+    Without a reset, one test simulating a provider failure permanently degrades that
+    provider's recorded success rate for every test that runs after it in the same
+    process, which the routing engine (correctly) treats as real signal."""
+    health_monitor._metrics.clear()
+    routing_engine._round_robin_counters.clear()
+    yield
+    health_monitor._metrics.clear()
+    routing_engine._round_robin_counters.clear()

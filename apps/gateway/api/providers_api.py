@@ -1,4 +1,5 @@
-from typing import Any, Dict, List
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
@@ -16,6 +17,23 @@ class ProviderDetailResponse(BaseModel):
     enabled: bool
     capabilities: Dict[str, bool]
     models: List[str]
+
+
+class ProviderMetricsResponse(BaseModel):
+    """Epic 4.5: the tracked health/trust data the router actually uses to rank
+    candidates, exposed over HTTP so it's visible outside the routing engine's own
+    process (dashboards, `setu benchmark`, alerting)."""
+
+    provider_name: str
+    status: str
+    trust_score: float
+    latency_ms: Optional[float]
+    success_rate: float
+    error_rate: float
+    total_requests: int
+    total_errors: int
+    is_rate_limited: bool
+    last_successful_request: Optional[datetime]
 
 
 @router.get("", response_model=List[ProviderDetailResponse])
@@ -56,6 +74,54 @@ async def get_provider_details(provider: str) -> ProviderDetailResponse:
         enabled=target_meta.enabled,
         capabilities=target_meta.capabilities.model_dump(),
         models=target_meta.models,
+    )
+
+
+@router.get("/metrics/all", response_model=List[ProviderMetricsResponse])
+async def list_provider_metrics() -> List[ProviderMetricsResponse]:
+    """Tracked health/trust metrics (Epic 4.5) for every registered provider - what the
+    router actually sees when ranking candidates."""
+    providers_meta = await provider_registry.list_providers()
+    results = []
+    for p in providers_meta:
+        metric = health_monitor.get_metrics(p.provider_name)
+        results.append(
+            ProviderMetricsResponse(
+                provider_name=metric.provider_name,
+                status=metric.status,
+                trust_score=metric.trust_score(),
+                latency_ms=metric.latency_ms,
+                success_rate=metric.success_rate,
+                error_rate=metric.error_rate,
+                total_requests=metric.total_requests,
+                total_errors=metric.total_errors,
+                is_rate_limited=metric.is_rate_limited,
+                last_successful_request=metric.last_successful_request,
+            )
+        )
+    return results
+
+
+@router.get("/{provider}/metrics", response_model=ProviderMetricsResponse)
+async def get_provider_metrics(provider: str) -> ProviderMetricsResponse:
+    """Tracked health/trust metrics (Epic 4.5) for a single provider."""
+    key = provider.lower()
+    providers_meta = await provider_registry.list_providers()
+    if not any(p.provider_name == key for p in providers_meta):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Provider '{provider}' not found")
+
+    metric = health_monitor.get_metrics(key)
+    return ProviderMetricsResponse(
+        provider_name=metric.provider_name,
+        status=metric.status,
+        trust_score=metric.trust_score(),
+        latency_ms=metric.latency_ms,
+        success_rate=metric.success_rate,
+        error_rate=metric.error_rate,
+        total_requests=metric.total_requests,
+        total_errors=metric.total_errors,
+        is_rate_limited=metric.is_rate_limited,
+        last_successful_request=metric.last_successful_request,
     )
 
 

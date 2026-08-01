@@ -1,14 +1,16 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import List, Optional
 import uuid
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from apps.gateway.db.models import Organization
+from apps.gateway.db.session import get_db_session
 
 router = APIRouter(prefix="/organizations", tags=["Organizations"])
-
-# In-memory store stub (syncs with Database models in full execution)
-_organizations_db_stub: dict[str, dict] = {}
 
 
 class OrganizationCreate(BaseModel):
@@ -34,90 +36,94 @@ class OrganizationResponse(BaseModel):
 
 def _slugify(name: str) -> str:
     """Generate a clean URL slug from name."""
-    return name.lower().replace(" ", "-").replace("_", "-")
+    return "".join(c if c.isalnum() else "-" for c in name.lower()).strip("-") or "org"
+
+
+def _to_response(org: Organization) -> OrganizationResponse:
+    return OrganizationResponse(
+        id=str(org.id),
+        name=org.name,
+        slug=org.slug,
+        plan=org.plan,
+        created_at=org.created_at,
+        updated_at=org.updated_at,
+    )
+
+
+async def _get_org_or_404(id: str, db: AsyncSession) -> Organization:
+    try:
+        org_id = uuid.UUID(id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Organization '{id}' not found")
+    result = await db.execute(select(Organization).where(Organization.id == org_id))
+    org = result.scalar_one_or_none()
+    if not org:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Organization '{id}' not found")
+    return org
 
 
 @router.get("", response_model=List[OrganizationResponse])
-async def list_organizations() -> List[OrganizationResponse]:
+async def list_organizations(db: AsyncSession = Depends(get_db_session)) -> List[OrganizationResponse]:
     """List all organizations."""
-    return [OrganizationResponse(**org) for org in _organizations_db_stub.values()]
+    result = await db.execute(select(Organization))
+    return [_to_response(o) for o in result.scalars().all()]
 
 
 @router.post("", response_model=OrganizationResponse, status_code=status.HTTP_201_CREATED)
-async def create_organization(req: OrganizationCreate) -> OrganizationResponse:
+async def create_organization(
+    req: OrganizationCreate, db: AsyncSession = Depends(get_db_session)
+) -> OrganizationResponse:
     """Create a new organization."""
-    org_id = str(uuid.uuid4())
     slug = req.slug or _slugify(req.name)
 
-    # Check slug uniqueness
-    for org in _organizations_db_stub.values():
-        if org["slug"] == slug:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Organization with slug '{slug}' already exists",
-            )
+    existing = await db.execute(select(Organization).where(Organization.slug == slug))
+    if existing.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Organization with slug '{slug}' already exists",
+        )
 
-    now = datetime.now(timezone.utc)
-    org_record = {
-        "id": org_id,
-        "name": req.name,
-        "slug": slug,
-        "plan": req.plan or "free",
-        "created_at": now,
-        "updated_at": now,
-    }
-
-    _organizations_db_stub[org_id] = org_record
-    return OrganizationResponse(**org_record)
+    org = Organization(id=uuid.uuid4(), name=req.name, slug=slug, plan=req.plan or "free")
+    db.add(org)
+    await db.flush()
+    return _to_response(org)
 
 
 @router.get("/{id}", response_model=OrganizationResponse)
-async def get_organization(id: str) -> OrganizationResponse:
+async def get_organization(id: str, db: AsyncSession = Depends(get_db_session)) -> OrganizationResponse:
     """Retrieve an organization by ID."""
-    org = _organizations_db_stub.get(id)
-    if not org:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Organization '{id}' not found",
-        )
-    return OrganizationResponse(**org)
+    org = await _get_org_or_404(id, db)
+    return _to_response(org)
 
 
 @router.patch("/{id}", response_model=OrganizationResponse)
-async def update_organization(id: str, req: OrganizationUpdate) -> OrganizationResponse:
+async def update_organization(
+    id: str, req: OrganizationUpdate, db: AsyncSession = Depends(get_db_session)
+) -> OrganizationResponse:
     """Update organization attributes."""
-    org = _organizations_db_stub.get(id)
-    if not org:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Organization '{id}' not found",
-        )
+    org = await _get_org_or_404(id, db)
 
+    if req.slug is not None and req.slug != org.slug:
+        existing = await db.execute(select(Organization).where(Organization.slug == req.slug))
+        conflict = existing.scalar_one_or_none()
+        if conflict is not None and conflict.id != org.id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Organization with slug '{req.slug}' already exists",
+            )
+        org.slug = req.slug
     if req.name is not None:
-        org["name"] = req.name
-    if req.slug is not None:
-        # Check slug collision
-        for existing_id, existing_org in _organizations_db_stub.items():
-            if existing_id != id and existing_org["slug"] == req.slug:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail=f"Organization with slug '{req.slug}' already exists",
-                )
-        org["slug"] = req.slug
+        org.name = req.name
     if req.plan is not None:
-        org["plan"] = req.plan
+        org.plan = req.plan
 
-    org["updated_at"] = datetime.now(timezone.utc)
-    return OrganizationResponse(**org)
+    await db.flush()
+    return _to_response(org)
 
 
 @router.delete("/{id}", status_code=status.HTTP_200_OK)
-async def delete_organization(id: str) -> dict:
+async def delete_organization(id: str, db: AsyncSession = Depends(get_db_session)) -> dict:
     """Delete an organization by ID."""
-    org = _organizations_db_stub.pop(id, None)
-    if not org:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Organization '{id}' not found",
-        )
+    org = await _get_org_or_404(id, db)
+    await db.delete(org)
     return {"message": f"Organization '{id}' deleted successfully"}

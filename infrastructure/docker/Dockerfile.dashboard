@@ -8,7 +8,7 @@ COPY pnpm-workspace.yaml package.json pnpm-lock.yaml* ./
 COPY apps/dashboard ./apps/dashboard
 COPY packages ./packages
 
-RUN pnpm install --no-frozen-lockfile || true
+RUN pnpm install --frozen-lockfile
 
 EXPOSE 3000
 

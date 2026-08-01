@@ -43,3 +43,24 @@ def test_reload_providers_endpoint():
     data = resp.json()
     assert "reloaded successfully" in data["message"]
     assert "active_providers_count" in data
+
+
+def test_list_all_provider_metrics():
+    resp = client.get("/providers/metrics/all")
+    assert resp.status_code == 200
+    metrics = resp.json()
+    assert len(metrics) >= 4
+    assert all("trust_score" in m for m in metrics)
+    names = [m["provider_name"] for m in metrics]
+    assert "openai" in names
+
+
+def test_get_single_provider_metrics():
+    resp = client.get("/providers/openai/metrics")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["provider_name"] == "openai"
+    assert 0.0 <= data["trust_score"] <= 100.0
+
+    bad_resp = client.get("/providers/nonexistent_provider_xyz/metrics")
+    assert bad_resp.status_code == 404

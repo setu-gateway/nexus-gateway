@@ -13,7 +13,7 @@ from packages.plugin_sdk import (
 )
 from packages.shared.config.settings import load_settings
 from packages.shared.logging.logger import get_logger
-from packages.shared.network import execute_with_exponential_backoff
+from packages.shared.network import retry_provider_call
 
 logger = get_logger("openai_provider")
 
@@ -69,7 +69,7 @@ class OpenAIProviderPlugin(ProviderPlugin):
                 resp.raise_for_status()
                 return resp.json()
 
-        return await execute_with_exponential_backoff(_call_api, provider_name=self.provider_name)
+        return await retry_provider_call(_call_api, provider_name=self.provider_name)
 
     async def stream_chat(self, request: ChatRequest) -> AsyncGenerator[str, None]:
         """Stream chat completions via Server-Sent Events (SSE)."""
@@ -124,7 +124,7 @@ class OpenAIProviderPlugin(ProviderPlugin):
                 resp.raise_for_status()
                 return resp.json()
 
-        return await execute_with_exponential_backoff(_call_embed, provider_name=self.provider_name)
+        return await retry_provider_call(_call_embed, provider_name=self.provider_name)
 
     async def image(self, request: ImageRequest) -> Dict[str, Any]:
         """Generate images using OpenAI DALL-E."""

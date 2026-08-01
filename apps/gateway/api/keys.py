@@ -2,15 +2,16 @@ from datetime import datetime, timezone
 from typing import List, Optional
 import uuid
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.gateway.auth.api_key import generate_api_key, mask_api_key
+from apps.gateway.db.models import APIKey
+from apps.gateway.db.session import get_db_session
 
 router = APIRouter(prefix="/keys", tags=["API Keys"])
-
-# In-memory store stub (syncs with Database models in full execution)
-_api_keys_db_stub: dict[str, dict] = {}
 
 
 class ApiKeyCreateRequest(BaseModel):
@@ -39,68 +40,93 @@ class ApiKeyResponse(BaseModel):
     created_at: datetime
 
 
+def _to_response(key: APIKey) -> ApiKeyResponse:
+    return ApiKeyResponse(
+        id=str(key.id),
+        name=key.name,
+        project_id=str(key.project_id),
+        masked_key=key.masked_key,
+        last_used_at=key.last_used_at,
+        expires_at=key.expires_at,
+        created_at=key.created_at,
+    )
+
+
+async def _get_active_key_or_404(id: str, db: AsyncSession) -> APIKey:
+    try:
+        key_id = uuid.UUID(id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"API key '{id}' not found")
+    result = await db.execute(select(APIKey).where(APIKey.id == key_id, APIKey.revoked_at.is_(None)))
+    key = result.scalar_one_or_none()
+    if not key:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"API key '{id}' not found")
+    return key
+
+
 @router.post("", response_model=ApiKeyCreatedResponse, status_code=status.HTTP_201_CREATED)
-async def create_api_key(req: ApiKeyCreateRequest) -> ApiKeyCreatedResponse:
+async def create_api_key(
+    req: ApiKeyCreateRequest, db: AsyncSession = Depends(get_db_session)
+) -> ApiKeyCreatedResponse:
     """Generate a secure API key (sk_setu_...). Stores ONLY the SHA-256 hash in DB."""
-    key_id = str(uuid.uuid4())
+    try:
+        project_id = uuid.UUID(req.project_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="project_id must be a valid UUID")
+
     plaintext_key, hashed_key = generate_api_key(prefix="sk_setu_")
     masked = mask_api_key(plaintext_key)
-    now = datetime.now(timezone.utc)
 
-    key_record = {
-        "id": key_id,
-        "name": req.name,
-        "project_id": req.project_id,
-        "hashed_key": hashed_key,
-        "masked_key": masked,
-        "last_used_at": None,
-        "expires_at": req.expires_at,
-        "created_at": now,
-    }
-
-    _api_keys_db_stub[key_id] = key_record
-
-    return ApiKeyCreatedResponse(
-        id=key_id,
+    key = APIKey(
+        id=uuid.uuid4(),
+        project_id=project_id,
         name=req.name,
-        project_id=req.project_id,
-        key=plaintext_key,
+        hashed_key=hashed_key,
         masked_key=masked,
         expires_at=req.expires_at,
-        created_at=now,
+    )
+    db.add(key)
+    await db.flush()
+
+    return ApiKeyCreatedResponse(
+        id=str(key.id),
+        name=key.name,
+        project_id=str(key.project_id),
+        key=plaintext_key,
+        masked_key=masked,
+        expires_at=key.expires_at,
+        created_at=key.created_at,
     )
 
 
 @router.get("", response_model=List[ApiKeyResponse])
 async def list_api_keys(
-    project_id: Optional[str] = Query(None, description="Filter by project ID")
+    project_id: Optional[str] = Query(None, description="Filter by project ID"),
+    db: AsyncSession = Depends(get_db_session),
 ) -> List[ApiKeyResponse]:
-    """List API keys (masked for safety). Plaintext keys are never returned."""
-    keys = list(_api_keys_db_stub.values())
+    """List active (non-revoked) API keys, masked for safety. Plaintext keys are never returned."""
+    query = select(APIKey).where(APIKey.revoked_at.is_(None))
     if project_id:
-        keys = [k for k in keys if k["project_id"] == project_id]
-    return [ApiKeyResponse(**k) for k in keys]
+        try:
+            query = query.where(APIKey.project_id == uuid.UUID(project_id))
+        except ValueError:
+            return []
+    result = await db.execute(query)
+    return [_to_response(k) for k in result.scalars().all()]
 
 
 @router.get("/{id}", response_model=ApiKeyResponse)
-async def get_api_key(id: str) -> ApiKeyResponse:
+async def get_api_key(id: str, db: AsyncSession = Depends(get_db_session)) -> ApiKeyResponse:
     """Retrieve API key metadata by ID."""
-    key = _api_keys_db_stub.get(id)
-    if not key:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"API key '{id}' not found",
-        )
-    return ApiKeyResponse(**key)
+    key = await _get_active_key_or_404(id, db)
+    return _to_response(key)
 
 
 @router.delete("/{id}", status_code=status.HTTP_200_OK)
-async def revoke_api_key(id: str) -> dict:
-    """Revoke/delete an API key by ID."""
-    key = _api_keys_db_stub.pop(id, None)
-    if not key:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"API key '{id}' not found",
-        )
+async def revoke_api_key(id: str, db: AsyncSession = Depends(get_db_session)) -> dict:
+    """Revoke an API key. Soft-deleted (revoked_at set) rather than removed outright,
+    so a compromised-key incident leaves an audit trail (RFC-0008)."""
+    key = await _get_active_key_or_404(id, db)
+    key.revoked_at = datetime.now(timezone.utc)
+    await db.flush()
     return {"message": f"API key '{id}' revoked successfully"}

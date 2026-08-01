@@ -12,6 +12,9 @@ class ProviderCapabilities(BaseModel):
     embeddings: bool = False
     image: bool = False
     audio: bool = False
+    streaming: bool = True
+    tools: bool = True
+    vision: bool = False
 
 
 class ProviderMetadata(BaseModel):

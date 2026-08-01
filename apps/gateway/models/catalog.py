@@ -18,6 +18,26 @@ class ModelDefinition(BaseModel):
     supports_streaming: bool = Field(default=True, description="Supports SSE token streaming")
     supports_vision: bool = Field(default=False, description="Supports image / multimodal input")
     supports_embeddings: bool = Field(default=False, description="Is a vector embedding model")
+    tier: str = Field(
+        default="fast",
+        description="Rough capability class used for cross-provider fallback equivalence: "
+        "'flagship', 'fast', or 'embedding'",
+    )
+    input_cost_per_1k: float = Field(
+        default=0.0, ge=0.0, description="Approximate USD cost per 1K input tokens (0 for self-hosted/free models)"
+    )
+    output_cost_per_1k: float = Field(
+        default=0.0, ge=0.0, description="Approximate USD cost per 1K output tokens (0 for self-hosted/free models)"
+    )
+
+    def estimate_cost(self, input_tokens: int, output_tokens: int = 0) -> float:
+        """Estimate request cost in USD from token counts. Pricing is illustrative and
+        should be kept in sync with each provider's published pricing page."""
+        return round(
+            (input_tokens / 1000.0) * self.input_cost_per_1k
+            + (output_tokens / 1000.0) * self.output_cost_per_1k,
+            6,
+        )
 
 
 class ModelRegistry:
@@ -40,6 +60,9 @@ class ModelRegistry:
                 supports_tools=True,
                 supports_streaming=True,
                 supports_vision=True,
+                tier="flagship",
+                input_cost_per_1k=0.0025,
+                output_cost_per_1k=0.01,
             ),
             ModelDefinition(
                 model_id="gpt-4o-mini",
@@ -50,6 +73,9 @@ class ModelRegistry:
                 supports_tools=True,
                 supports_streaming=True,
                 supports_vision=True,
+                tier="fast",
+                input_cost_per_1k=0.00015,
+                output_cost_per_1k=0.0006,
             ),
             ModelDefinition(
                 model_id="text-embedding-3-small",
@@ -60,6 +86,8 @@ class ModelRegistry:
                 supports_tools=False,
                 supports_streaming=False,
                 supports_embeddings=True,
+                tier="embedding",
+                input_cost_per_1k=0.00002,
             ),
             # Anthropic Models
             ModelDefinition(
@@ -71,6 +99,9 @@ class ModelRegistry:
                 supports_tools=True,
                 supports_streaming=True,
                 supports_vision=True,
+                tier="flagship",
+                input_cost_per_1k=0.003,
+                output_cost_per_1k=0.015,
             ),
             ModelDefinition(
                 model_id="claude-3-5-haiku",
@@ -80,6 +111,9 @@ class ModelRegistry:
                 context_window=200000,
                 supports_tools=True,
                 supports_streaming=True,
+                tier="fast",
+                input_cost_per_1k=0.0008,
+                output_cost_per_1k=0.004,
             ),
             # Ollama Models
             ModelDefinition(
@@ -90,6 +124,9 @@ class ModelRegistry:
                 context_window=128000,
                 supports_tools=True,
                 supports_streaming=True,
+                tier="fast",
+                input_cost_per_1k=0.0,
+                output_cost_per_1k=0.0,
             ),
             ModelDefinition(
                 model_id="mistral",
@@ -99,6 +136,9 @@ class ModelRegistry:
                 context_window=32768,
                 supports_tools=True,
                 supports_streaming=True,
+                tier="fast",
+                input_cost_per_1k=0.0,
+                output_cost_per_1k=0.0,
             ),
             # Gemini Models
             ModelDefinition(
@@ -110,6 +150,9 @@ class ModelRegistry:
                 supports_tools=True,
                 supports_streaming=True,
                 supports_vision=True,
+                tier="flagship",
+                input_cost_per_1k=0.00125,
+                output_cost_per_1k=0.005,
             ),
             ModelDefinition(
                 model_id="gemini-1.5-flash",
@@ -120,6 +163,9 @@ class ModelRegistry:
                 supports_tools=True,
                 supports_streaming=True,
                 supports_vision=True,
+                tier="fast",
+                input_cost_per_1k=0.000075,
+                output_cost_per_1k=0.0003,
             ),
             # Groq Models
             ModelDefinition(
@@ -130,6 +176,9 @@ class ModelRegistry:
                 context_window=128000,
                 supports_tools=True,
                 supports_streaming=True,
+                tier="fast",
+                input_cost_per_1k=0.00059,
+                output_cost_per_1k=0.00079,
             ),
         ]
 
@@ -163,3 +212,28 @@ class ModelRegistry:
             target_prov = provider_name.lower()
             models = [m for m in models if m.provider_name == target_prov]
         return models
+
+    def find_equivalents(self, model_id: str, require_vision: Optional[bool] = None) -> List[ModelDefinition]:
+        """Find same-tier models from OTHER providers, for cross-provider routing fallback.
+
+        Used when the primary provider for a requested model is unavailable: the router
+        needs a real upstream model to call on a different provider, not just a healthy
+        provider name. Matching on tier (and, when relevant, vision support) keeps a
+        fallback roughly equivalent in capability rather than swapping a flagship request
+        for an unrelated cheap/local model.
+        """
+        primary = self.get_model(model_id)
+        if not primary:
+            return []
+
+        candidates = [
+            m
+            for m in self._catalog.values()
+            if m.provider_name != primary.provider_name
+            and m.tier == primary.tier
+            and m.supports_embeddings == primary.supports_embeddings
+        ]
+        if require_vision or (require_vision is None and primary.supports_vision):
+            candidates = [m for m in candidates if m.supports_vision]
+
+        return candidates

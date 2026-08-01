@@ -7,6 +7,7 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+from apps.gateway.db import models  # noqa: F401 - registers every model's table on Base.metadata
 from apps.gateway.db.base import Base
 
 config = context.config
