@@ -1,8 +1,9 @@
-from unittest.mock import patch
 import uuid
+from unittest.mock import patch
 
-from fastapi.testclient import TestClient
 import pytest
+from conftest import register_and_login
+from fastapi.testclient import TestClient
 
 from apps.gateway.analytics import RequestTimeline, record_request
 from apps.gateway.db.models import RequestLog
@@ -118,3 +119,59 @@ def test_analytics_requests_filters_by_organization():
 
     other_org = client.get("/analytics/requests", params={"organization_id": str(uuid.uuid4())}).json()
     assert other_org == []
+
+
+def test_analytics_requests_and_summary_filter_by_project():
+    org_id, headers = register_and_login(client)
+    project = client.post("/projects", json={"name": "Analytics Project", "organization_id": org_id}, headers=headers).json()
+    other_project = client.post("/projects", json={"name": "Other Project", "organization_id": org_id}, headers=headers).json()
+    key = client.post("/keys", json={"project_id": project["id"], "name": "analytics key"}, headers=headers).json()
+
+    client.post(
+        "/v1/chat/completions",
+        json={"model": "gpt-4o", "messages": [{"role": "user", "content": "project scoped"}]},
+        headers={"Authorization": f"Bearer {key['key']}"},
+    )
+
+    scoped_rows = client.get("/analytics/requests", params={"project_id": project["id"]}).json()
+    assert len(scoped_rows) == 1
+    assert scoped_rows[0]["project_id"] == project["id"]
+
+    other_rows = client.get("/analytics/requests", params={"project_id": other_project["id"]}).json()
+    assert other_rows == []
+
+    summary = client.get("/analytics/summary", params={"project_id": project["id"]}).json()
+    assert summary["total_requests"] == 1
+
+
+def test_analytics_requests_and_summary_filter_by_model():
+    client.post("/v1/chat/completions", json={"model": "gpt-4o", "messages": [{"role": "user", "content": "model a"}]})
+    client.post("/v1/chat/completions", json={"model": "gpt-4o-mini", "messages": [{"role": "user", "content": "model b"}]})
+
+    rows = client.get("/analytics/requests", params={"model": "gpt-4o-mini"}).json()
+    assert rows and all(r["requested_model"] == "gpt-4o-mini" for r in rows)
+
+    summary = client.get("/analytics/summary", params={"model": "gpt-4o-mini"}).json()
+    assert summary["total_requests"] == len(rows)
+    assert all(m["model"] == "gpt-4o-mini" for m in summary["top_models"])
+
+
+def test_analytics_summary_top_models_breakdown():
+    client.post("/v1/chat/completions", json={"model": "gpt-4o", "messages": [{"role": "user", "content": "top models 1"}]})
+    client.post("/v1/chat/completions", json={"model": "gpt-4o", "messages": [{"role": "user", "content": "top models 2"}]})
+    client.post("/v1/chat/completions", json={"model": "gpt-4o-mini", "messages": [{"role": "user", "content": "top models 3"}]})
+
+    summary = client.get("/analytics/summary").json()
+    by_model = {m["model"]: m for m in summary["top_models"]}
+    assert by_model["gpt-4o"]["requests"] >= 2
+    assert by_model["gpt-4o-mini"]["requests"] >= 1
+    # Sorted descending by request count.
+    assert summary["top_models"] == sorted(summary["top_models"], key=lambda m: m["requests"], reverse=True)
+
+
+def test_analytics_summary_top_models_limit_is_respected():
+    for model in ["gpt-4o", "gpt-4o-mini", "claude-3-5-sonnet", "gemini-1.5-pro"]:
+        client.post("/v1/chat/completions", json={"model": model, "messages": [{"role": "user", "content": "limit test"}]})
+
+    summary = client.get("/analytics/summary", params={"top_models_limit": 2}).json()
+    assert len(summary["top_models"]) <= 2

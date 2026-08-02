@@ -1,4 +1,3 @@
-* @setu-gateway/maintainers
-/apps/gateway/ @setu-gateway/gateway-team
-/apps/dashboard/ @setu-gateway/frontend-team
-/infrastructure/ @setu-gateway/devops-team
+# Single-owner project for now - split into team-based ownership (e.g.
+# @setu-gateway/gateway-team) once the org has enough active maintainers to staff them.
+* @JaswanthPotagani

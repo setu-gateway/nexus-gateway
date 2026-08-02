@@ -1,7 +1,7 @@
-from datetime import datetime, timezone
-from typing import Any, List, Optional, Tuple
 import random
 import uuid
+from datetime import datetime, timezone
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -48,13 +48,13 @@ class RoutingDecision(BaseModel):
     selection_reason: str
     fallback_used: bool
     estimated_cost: float
-    candidates: List[RoutingCandidate]
-    fallback_chain: List[str]
-    rule_applied: Optional[str] = None
+    candidates: list[RoutingCandidate]
+    fallback_chain: list[str]
+    rule_applied: str | None = None
     decided_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-def _weighted_choice(weighted: List[Tuple[RoutingCandidate, float]], rng: Any = random) -> RoutingCandidate:
+def _weighted_choice(weighted: list[tuple[RoutingCandidate, float]], rng: Any = random) -> RoutingCandidate:
     candidates = [c for c, _ in weighted]
     weights = [w for _, w in weighted]
     return rng.choices(candidates, weights=weights, k=1)[0]
@@ -74,7 +74,7 @@ class RoutingEngine:
         model_registry: ModelRegistry,
         provider_registry: ProviderRegistry,
         health_monitor: ProviderHealthMonitor,
-        config: Optional[RoutingConfig] = None,
+        config: RoutingConfig | None = None,
         rng: Any = random,
     ):
         self.model_registry = model_registry
@@ -84,9 +84,7 @@ class RoutingEngine:
         self._rng = rng
         self._round_robin_counters: dict[str, int] = {}
 
-    def _build_candidates(
-        self, requested_model: str, required_capability: Optional[str] = None
-    ) -> List[RoutingCandidate]:
+    def _build_candidates(self, requested_model: str, required_capability: str | None = None) -> list[RoutingCandidate]:
         primary_provider, primary_upstream = self.model_registry.resolve_provider_model(requested_model)
         primary_def = self.model_registry.get_model(requested_model)
 
@@ -94,7 +92,7 @@ class RoutingEngine:
             required_capability is None and bool(primary_def and primary_def.supports_vision)
         )
 
-        pool: List[Tuple[str, str, Any, bool]] = []
+        pool: list[tuple[str, str, Any, bool]] = []
         seen_providers = set()
 
         primary_matches_capability = not require_vision or not primary_def or primary_def.supports_vision
@@ -127,9 +125,7 @@ class RoutingEngine:
             )
         return candidates
 
-    def _resolve_named_provider_candidate(
-        self, provider_name: str, requested_model: str
-    ) -> Optional[RoutingCandidate]:
+    def _resolve_named_provider_candidate(self, provider_name: str, requested_model: str) -> RoutingCandidate | None:
         """Build a candidate for a provider named explicitly by a routing rule action,
         even if it wouldn't normally qualify as a same-tier equivalent (an org rule is an
         explicit override, not a suggestion)."""
@@ -142,9 +138,7 @@ class RoutingEngine:
             return None
 
         primary_def = self.model_registry.get_model(requested_model)
-        chosen_def = next(
-            (m for m in provider_models if primary_def and m.tier == primary_def.tier), provider_models[0]
-        )
+        chosen_def = next((m for m in provider_models if primary_def and m.tier == primary_def.tier), provider_models[0])
 
         metric = self.health_monitor.get_metrics(provider_name)
         return RoutingCandidate(
@@ -161,9 +155,9 @@ class RoutingEngine:
         self,
         policy: RoutingPolicy,
         requested_model: str,
-        candidates: List[RoutingCandidate],
-        preferred_provider: Optional[str],
-    ) -> Tuple[List[RoutingCandidate], str]:
+        candidates: list[RoutingCandidate],
+        preferred_provider: str | None,
+    ) -> tuple[list[RoutingCandidate], str]:
         if policy == RoutingPolicy.LOWEST_LATENCY:
             ranked = sorted(candidates, key=lambda c: (c.latency_ms, not c.is_primary, -c.trust_score))
             top = ranked[0]
@@ -190,9 +184,7 @@ class RoutingEngine:
             pref = (preferred_provider or self.config.preferred_provider or "").lower()
             if pref:
                 preferred = [c for c in candidates if c.provider_name == pref]
-                rest = sorted(
-                    (c for c in candidates if c.provider_name != pref), key=lambda c: (not c.is_primary, -c.trust_score)
-                )
+                rest = sorted((c for c in candidates if c.provider_name != pref), key=lambda c: (not c.is_primary, -c.trust_score))
                 if preferred:
                     return preferred + rest, f"Organization/project default provider: {pref}"
             ranked = sorted(candidates, key=lambda c: (not c.is_primary, -c.trust_score))
@@ -225,10 +217,10 @@ class RoutingEngine:
     def route(
         self,
         requested_model: str,
-        policy: Optional[RoutingPolicy] = None,
-        required_capability: Optional[str] = None,
-        preferred_provider: Optional[str] = None,
-        rules: Optional[List[RuleSpec]] = None,
+        policy: RoutingPolicy | None = None,
+        required_capability: str | None = None,
+        preferred_provider: str | None = None,
+        rules: list[RuleSpec] | None = None,
     ) -> RoutingDecision:
         """Pick a provider/model for a request, returning the full ranked fallback chain
         and the reasoning behind the top pick.
@@ -258,14 +250,10 @@ class RoutingEngine:
 
         if rule_outcome and rule_outcome.matched:
             if rule_outcome.action_type == RuleActionType.REJECT:
-                raise RoutingRejectedError(
-                    f"Request rejected by routing rule '{rule_outcome.rule_name}' for model '{requested_model}'"
-                )
+                raise RoutingRejectedError(f"Request rejected by routing rule '{rule_outcome.rule_name}' for model '{requested_model}'")
 
             if rule_outcome.action_provider:
-                forced = next(
-                    (c for c in healthy if c.provider_name == rule_outcome.action_provider.lower()), None
-                )
+                forced = next((c for c in healthy if c.provider_name == rule_outcome.action_provider.lower()), None)
                 if not forced:
                     resolved = self._resolve_named_provider_candidate(rule_outcome.action_provider, requested_model)
                     if resolved and resolved.healthy:
@@ -280,10 +268,7 @@ class RoutingEngine:
                     )
                     ranked = [forced] + rest
                     selected = forced
-                    reason = (
-                        f"Routing rule '{rule_outcome.rule_name}' matched "
-                        f"({rule_outcome.action_type.value} -> {forced.provider_name})"
-                    )
+                    reason = f"Routing rule '{rule_outcome.rule_name}' matched ({rule_outcome.action_type.value} -> {forced.provider_name})"
                     decision = RoutingDecision(
                         requested_model=requested_model,
                         selected_provider=selected.provider_name,
@@ -297,8 +282,7 @@ class RoutingEngine:
                         rule_applied=rule_outcome.rule_name,
                     )
                     logger.info(
-                        f"Routed model='{requested_model}' -> provider='{selected.provider_name}' "
-                        f"via rule='{rule_outcome.rule_name}'"
+                        f"Routed model='{requested_model}' -> provider='{selected.provider_name}' via rule='{rule_outcome.rule_name}'"
                     )
                     return decision
                 logger.warning(

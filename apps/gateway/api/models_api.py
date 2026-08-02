@@ -1,9 +1,10 @@
-from typing import Dict, List, Optional
-
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
 from apps.gateway.providers.instance import model_registry, provider_registry
+from packages.shared.logging.logger import get_logger
+
+logger = get_logger("models_api")
 
 router = APIRouter(prefix="/models", tags=["Unified Model Registry"])
 
@@ -13,14 +14,14 @@ class UnifiedModelResponse(BaseModel):
     provider: str = Field(description="Associated LLM provider name")
     display_name: str = Field(description="Human-readable display name")
     context_window: int = Field(description="Maximum context token limit")
-    capabilities: Dict[str, bool] = Field(description="Capability flags")
+    capabilities: dict[str, bool] = Field(description="Capability flags")
 
 
-@router.get("", response_model=List[UnifiedModelResponse])
-async def list_unified_models() -> List[UnifiedModelResponse]:
+@router.get("", response_model=list[UnifiedModelResponse])
+async def list_unified_models() -> list[UnifiedModelResponse]:
     """List all available models in unified format across all active providers."""
     models_list = model_registry.list_models()
-    res: List[UnifiedModelResponse] = [
+    res: list[UnifiedModelResponse] = [
         UnifiedModelResponse(
             id=m.model_id,
             provider=m.provider_name,
@@ -58,8 +59,8 @@ async def list_unified_models() -> List[UnifiedModelResponse]:
                             },
                         )
                     )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Skipping local Ollama model discovery: {e}")
 
     return res
 

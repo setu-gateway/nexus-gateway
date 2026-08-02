@@ -1,10 +1,10 @@
 import contextvars
-from datetime import datetime, timezone
 import json
 import logging
 import os
 import sys
-from typing import Any, Dict, Optional
+from datetime import datetime, timezone
+from typing import Any
 
 trace_id_ctx: contextvars.ContextVar[str] = contextvars.ContextVar("trace_id", default="")
 request_id_ctx: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="")
@@ -39,12 +39,12 @@ def clear_context() -> None:
 class JSONFormatter(logging.Formatter):
     """Custom logging formatter that outputs logs strictly as structured JSON objects."""
 
-    def __init__(self, service_name: Optional[str] = None):
+    def __init__(self, service_name: str | None = None):
         super().__init__()
         self.service_name = service_name or os.getenv("SERVICE_NAME", "gateway")
 
     def format(self, record: logging.LogRecord) -> str:
-        log_object: Dict[str, Any] = {
+        log_object: dict[str, Any] = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "level": record.levelname,
             "trace_id": getattr(record, "trace_id", None) or get_trace_id(),
@@ -57,10 +57,29 @@ class JSONFormatter(logging.Formatter):
             log_object["exception"] = self.formatException(record.exc_info)
 
         reserved_keys = {
-            "name", "msg", "args", "levelname", "levelno", "pathname", "filename",
-            "module", "exc_info", "exc_text", "stack_info", "lineno", "funcName",
-            "created", "msecs", "relativeCreated", "thread", "threadName",
-            "processName", "process", "trace_id", "request_id", "service"
+            "name",
+            "msg",
+            "args",
+            "levelname",
+            "levelno",
+            "pathname",
+            "filename",
+            "module",
+            "exc_info",
+            "exc_text",
+            "stack_info",
+            "lineno",
+            "funcName",
+            "created",
+            "msecs",
+            "relativeCreated",
+            "thread",
+            "threadName",
+            "processName",
+            "process",
+            "trace_id",
+            "request_id",
+            "service",
         }
         for key, value in record.__dict__.items():
             if key not in reserved_keys:

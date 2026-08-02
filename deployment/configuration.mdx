@@ -1,0 +1,87 @@
+---
+title: "Configuration"
+description: "Environment variables and configuration files the gateway reads"
+---
+
+The gateway reads configuration from environment variables (via `.env` in development - see `.env.example` for a starting point) and two optional YAML overlay files. Environment variables always take precedence over the YAML files.
+
+## Core settings
+
+Defined in `packages/shared/config/settings.py`'s `AppSettings`.
+
+| Variable | Default | Notes |
+|---|---|---|
+| `SERVICE_NAME` | `gateway` | |
+| `ENVIRONMENT` | `development` | `development`, `staging`, `production`, or `test`. `production` unlocks stricter validation (below). |
+| `PORT` | `8000` | |
+| `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`. |
+| `DATABASE_URL` | `postgresql://setu:setu_pass@localhost:5432/setu_db` | `postgresql://` is rewritten to `postgresql+asyncpg://` automatically. |
+| `REDIS_URL` | `redis://localhost:6379/0` | |
+| `REDIS_MAX_CONNECTIONS` | `20` | |
+| `JWT_SECRET` | *(insecure placeholder)* | Signs access/refresh tokens. **Must** be 32+ characters and not contain `default`/`change-me` when `ENVIRONMENT=production` - the gateway fails to start otherwise. |
+| `JWT_ALGORITHM` | `HS256` | One of `HS256/384/512`, `RS256/384/512`. |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `15` | |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | `30` | |
+| `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` | unset | Server-side provider credentials. A provider with no key configured falls back to a deterministic mock response instead of failing - see each [provider's page](/providers/openai). |
+
+## Database connection pool
+
+Added in `apps/gateway/db/engine.py`, read directly via `os.getenv` (not part of `AppSettings`).
+
+| Variable | Default | Notes |
+|---|---|---|
+| `DB_POOL_SIZE` | `20` | Baseline pooled connections per gateway instance. |
+| `DB_MAX_OVERFLOW` | `30` | Additional connections opened under load, on top of `DB_POOL_SIZE`. |
+| `DB_POOL_TIMEOUT_SECONDS` | `30` | How long a request waits for a connection before failing, once the pool + overflow is exhausted. |
+
+Every in-flight request holds a connection for its full duration, so `DB_POOL_SIZE + DB_MAX_OVERFLOW` is a hard ceiling on concurrent requests, not just a tuning knob - see [PERFORMANCE.md](https://github.com/setu-gateway/nexus-gateway/blob/main/PERFORMANCE.md) for what happens when it's too low and how these defaults were chosen. If you run multiple gateway replicas, each has its own pool - the total across all replicas is what matters against Postgres's own `max_connections`.
+
+## Provider enablement
+
+Read by `packages/shared/config/providers_config.py`. `{NAME}` is one of `OPENAI`, `OLLAMA`, `ANTHROPIC`, `GEMINI`, `GROQ`.
+
+| Variable | Default |
+|---|---|
+| `PROVIDER_{NAME}_ENABLED` | `true` for all except Anthropic (`false`) |
+| `PROVIDER_{NAME}_BASE_URL` | provider's own default API base URL |
+| `PROVIDERS_CONFIG_PATH` | `providers.yaml` | Optional YAML overlay; see below. |
+
+## Routing
+
+Read by `apps/gateway/routing/config.py`.
+
+| Variable | Default |
+|---|---|
+| `ROUTING_CONFIG_PATH` | `routing.yaml` | Optional YAML overlay; see below. |
+| `ROUTING_DEFAULT_POLICY` | `highest_availability` | Any value accepted by the routing policy enum - see [Routing](/features/routing). |
+| `ROUTING_PREFERRED_PROVIDER` | unset | Used by the `user_preference` policy. |
+
+## YAML overlays
+
+Both are optional - if the file at the configured path doesn't exist, the gateway falls back to environment variables and then built-in defaults, and logs a warning rather than failing if the file exists but fails to parse.
+
+`providers.yaml`:
+
+```yaml
+providers:
+  anthropic:
+    enabled: true
+    base_url: "https://api.anthropic.com/v1"
+```
+
+`routing.yaml`:
+
+```yaml
+default_policy: lowest_cost
+preferred_provider: ollama
+routing:
+  openai: 0.6
+  gemini: 0.4
+```
+
+## Production checklist
+
+- Set a real `JWT_SECRET` (32+ random characters).
+- Set `ENVIRONMENT=production` so the gateway enforces the check above at startup instead of only warning.
+- Point `DATABASE_URL`/`REDIS_URL` at real, persistent instances - not the ephemeral containers `docker-compose.yml` starts for local development.
+- Size `DB_POOL_SIZE`/`DB_MAX_OVERFLOW` for your expected concurrency (see above), and `REDIS_MAX_CONNECTIONS` similarly.

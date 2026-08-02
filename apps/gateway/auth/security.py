@@ -1,9 +1,9 @@
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional
+from typing import Any
 
 import bcrypt
-from email_validator import EmailNotValidError, validate_email
 import jwt
+from email_validator import EmailNotValidError, validate_email
 
 from packages.shared.config.settings import load_settings
 
@@ -34,7 +34,7 @@ def validate_email_address(email: str) -> bool:
         return False
 
 
-def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
     """Create JWT Access Token."""
     settings = load_settings()
     to_encode = data.copy()
@@ -44,11 +44,13 @@ def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta]
     else:
         expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
 
-    to_encode.update({
-        "exp": expire,
-        "type": "access",
-        "iat": datetime.now(timezone.utc),
-    })
+    to_encode.update(
+        {
+            "exp": expire,
+            "type": "access",
+            "iat": datetime.now(timezone.utc),
+        }
+    )
 
     return jwt.encode(
         to_encode,
@@ -57,7 +59,7 @@ def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta]
     )
 
 
-def create_refresh_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+def create_refresh_token(data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
     """Create JWT Refresh Token."""
     settings = load_settings()
     to_encode = data.copy()
@@ -67,11 +69,13 @@ def create_refresh_token(data: Dict[str, Any], expires_delta: Optional[timedelta
     else:
         expire = datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days)
 
-    to_encode.update({
-        "exp": expire,
-        "type": "refresh",
-        "iat": datetime.now(timezone.utc),
-    })
+    to_encode.update(
+        {
+            "exp": expire,
+            "type": "refresh",
+            "iat": datetime.now(timezone.utc),
+        }
+    )
 
     return jwt.encode(
         to_encode,
@@ -80,7 +84,7 @@ def create_refresh_token(data: Dict[str, Any], expires_delta: Optional[timedelta
     )
 
 
-def decode_token(token: str) -> Dict[str, Any]:
+def decode_token(token: str) -> dict[str, Any]:
     """Decode and validate JWT Token."""
     settings = load_settings()
     try:
@@ -91,4 +95,4 @@ def decode_token(token: str) -> Dict[str, Any]:
         )
         return payload
     except jwt.PyJWTError as e:
-        raise ValueError(f"Invalid or expired token: {str(e)}")
+        raise ValueError(f"Invalid or expired token: {str(e)}") from e

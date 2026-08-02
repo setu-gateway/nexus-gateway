@@ -1,10 +1,10 @@
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
+import yaml
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-import yaml
 
 
 class AppSettings(BaseSettings):
@@ -27,10 +27,6 @@ class AppSettings(BaseSettings):
     redis_max_connections: int = Field(default=20, ge=1, description="Redis connection pool size")
 
     # Security & Secret management
-    secret_key: SecretStr = Field(
-        default=SecretStr("default-insecure-dev-secret-key-change-me"),
-        description="Application secret key",
-    )
     jwt_secret: SecretStr = Field(
         default=SecretStr("your-super-secret-jwt-key-min-32-chars-long"),
         description="JWT secret signing key",
@@ -40,11 +36,12 @@ class AppSettings(BaseSettings):
     refresh_token_expire_days: int = Field(default=30, ge=1, description="Refresh token expiration in days")
 
     # Provider Secrets
-    openai_api_key: Optional[SecretStr] = Field(default=None, description="OpenAI provider API key")
-    anthropic_api_key: Optional[SecretStr] = Field(default=None, description="Anthropic provider API key")
-    gemini_api_key: Optional[SecretStr] = Field(default=None, description="Google Gemini provider API key")
+    openai_api_key: SecretStr | None = Field(default=None, description="OpenAI provider API key")
+    anthropic_api_key: SecretStr | None = Field(default=None, description="Anthropic provider API key")
+    gemini_api_key: SecretStr | None = Field(default=None, description="Google Gemini provider API key")
+    groq_api_key: SecretStr | None = Field(default=None, description="Groq provider API key")
 
-    allowed_hosts: List[str] = Field(default=["*"], description="Allowed HTTP hosts")
+    allowed_hosts: list[str] = Field(default=["*"], description="Allowed HTTP hosts")
     request_timeout_seconds: int = Field(default=60, ge=1, description="Request timeout limit in seconds")
 
     model_config = SettingsConfigDict(
@@ -111,17 +108,17 @@ class AppSettings(BaseSettings):
         return self
 
 
-def load_yaml_config(filepath: Union[str, Path]) -> Dict[str, Any]:
+def load_yaml_config(filepath: str | Path) -> dict[str, Any]:
     """Load configuration dictionary from a YAML file."""
     path = Path(filepath)
     if not path.is_file():
         return {}
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         content = yaml.safe_load(f)
         return content if isinstance(content, dict) else {}
 
 
-def load_settings(yaml_file: Optional[Union[str, Path]] = None) -> AppSettings:
+def load_settings(yaml_file: str | Path | None = None) -> AppSettings:
     """Load and validate application settings combining .env, env vars, secrets, and YAML configs."""
     yaml_file_path = yaml_file or os.getenv("CONFIG_YAML_PATH", "config.yaml")
     yaml_dict = load_yaml_config(yaml_file_path)

@@ -3,15 +3,27 @@ title: "Introduction"
 description: "Overview of Setu Gateway capabilities and core features."
 ---
 
-# Introduction to Setu Gateway
+**Setu** (सेतु) means "bridge" in Sanskrit. Setu Gateway is a self-hostable bridge between your applications and every LLM provider you use — OpenAI, Anthropic, Google Gemini, Groq, and locally-run Ollama models — behind a single OpenAI-compatible API.
 
-Setu Gateway simplifies LLM infrastructure by acting as an OpenAI-compatible proxy between your applications and underlying model providers.
+Point your existing OpenAI SDK (or any HTTP client) at Setu instead of directly at a provider, and you get:
 
-## Key Features
+- **One API, every provider.** Chat completions, embeddings, and streaming behind the same `/v1/chat/completions` / `/v1/embeddings` / `/v1/models` surface OpenAI clients already speak.
+- **Intelligent routing.** Capability-aware model selection, health-aware fallback chains across providers, and org-level routing rules (e.g. "prefer Ollama when OpenAI is degraded").
+- **Caching.** A tiered in-memory → Redis → Postgres response cache, exact-match on (provider, model, messages, params) - not semantic/embedding-based.
+- **Time Machine.** Record a request/response pair and replay it later against the same model, a different model, or a different provider, to compare outputs deterministically.
+- **Scoped API keys.** Keys restricted to specific providers, models, and permissions, with IP allowlisting.
+- **Rate limiting.** Token bucket, sliding window, and fixed window algorithms, configurable per organization, project, or API key.
+- **Webhooks.** Real-time notifications for request completion, key lifecycle events, and quota thresholds, HMAC-signed and retried with exponential backoff.
+- **Usage analytics.** Per-provider and per-model breakdowns of request volume, latency, error rate, and estimated cost.
+- **An evaluation engine.** Define test cases with pluggable scorers (exact match, contains, structured output, tool calls), run them against any model, and track pass rates over time.
+- **SDKs and a CLI.** Official Python and TypeScript client libraries, plus a `setu` CLI for diagnostics, benchmarking, and replaying requests.
 
-- **OpenAI-Compatible API**: Seamlessly drop into existing OpenAI SDK implementations.
-- **Intelligent Routing**: Route requests based on cost, latency, rate limits, or custom rules.
-- **Unified Authentication**: Manage API keys, user roles, and access controls in one place.
-- **Built-in Caching**: Reduce latency and provider costs with semantic and exact response caching.
-- **Observability**: Track request metrics, token usage, and cost analytics in real time.
-- **Extensible Plugins**: Customize request lifecycle behavior with custom plugins.
+## How it fits together
+
+A request to Setu goes through, roughly: authentication (if a key is presented — see [Authentication](/api/authentication) for why it's optional) → permission and rate-limit checks → cache lookup → routing (pick a provider/model, honoring org rules and health) → the provider call, with automatic failover across the routing decision's fallback chain → response, with analytics recorded and the cache populated for next time.
+
+Read [Routing](/features/routing) and [Caching](/features/caching) for the details of the two stages most requests actually interact with.
+
+## Status
+
+Setu Gateway is pre-release and under active development. APIs and schemas may still change between releases. A plugin lifecycle interface exists (`BasePlugin.on_load` / `on_request` / `on_response` / `on_unload`, see [Plugins](/plugins/overview)) but the loader that would invoke those hooks during a live request isn't wired into the gateway's request path yet - implementing a plugin today gets you a tested, isolated unit, not one that runs automatically on traffic. See [Troubleshooting](/support/troubleshooting) for this and other known limitations.

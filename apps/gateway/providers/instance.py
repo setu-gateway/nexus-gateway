@@ -1,6 +1,8 @@
+from apps.gateway.cache.manager import CacheManager
 from apps.gateway.models.catalog import ModelRegistry
 from apps.gateway.providers.health_monitor import ProviderHealthMonitor
 from apps.gateway.providers.registry import ProviderCapabilities, ProviderRegistry
+from apps.gateway.ratelimit.limiter import RateLimiter
 from apps.gateway.routing.engine import RoutingEngine
 from packages.shared.config.providers_config import load_providers_config
 from plugins.providers import (
@@ -49,3 +51,9 @@ provider_registry.register_provider(
 # Intelligent router (Epic 4.1) - built on the same registries above, so it always sees
 # the current enablement/health state.
 routing_engine = RoutingEngine(model_registry, provider_registry, health_monitor)
+
+# Intelligent cache (Epic 5.1)
+cache_manager = CacheManager()
+
+# Redis-backed rate limiter (Epic 5.4)
+rate_limiter = RateLimiter()

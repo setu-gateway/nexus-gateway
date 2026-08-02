@@ -1,0 +1,44 @@
+---
+title: "Docker"
+description: "Running Setu Gateway with Docker Compose"
+---
+
+`docker-compose.yml` at the repo root defines four services: `gateway`, `dashboard`, `postgres`, and `redis`. This is the fastest way to get a full stack running - see [Installation](/getting-started/installation) for the exact commands.
+
+## Services
+
+| Service | Image | Port | Notes |
+|---|---|---|---|
+| `gateway` | built from `infrastructure/docker/Dockerfile.gateway` | `8000` | The FastAPI backend |
+| `dashboard` | built from `infrastructure/docker/Dockerfile.dashboard` | `3000` | Static build served by nginx, proxying `/api/*` to `gateway` |
+| `postgres` | `postgres:16-alpine` | `5432` | |
+| `redis` | `redis:7-alpine` | `6379` | |
+
+The gateway waits on Postgres and Redis via `depends_on: condition: service_healthy`, so `docker compose up -d` brings the stack up in the right order.
+
+## Configuration
+
+The gateway container reads its configuration from environment variables - `docker-compose.yml` wires the standard ones (`DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, provider keys, etc.) from your `.env` file. See [Configuration](/deployment/configuration) for the full list, including `DB_POOL_SIZE`/`DB_MAX_OVERFLOW` if you're running under sustained concurrent load - see [Performance Benchmarks](https://github.com/setu-gateway/nexus-gateway/blob/main/PERFORMANCE.md) for why the defaults are what they are.
+
+## Migrations
+
+The gateway image does not run migrations automatically on startup. Run them explicitly against a running Postgres:
+
+```bash
+docker compose up -d postgres
+DATABASE_URL="postgresql+asyncpg://setu:setu_pass@localhost:5432/setu_db" alembic upgrade head
+docker compose up -d
+```
+
+## Building a single image
+
+To build just the gateway image (for pushing to your own registry, for example):
+
+```bash
+docker build -f infrastructure/docker/Dockerfile.gateway -t setu-gateway:local .
+```
+
+## Production notes
+
+- The dashboard's Dockerfile does a multi-stage build: `vite build` produces a static bundle, served by nginx (not Vite's dev server) with an nginx `location /api/` block replicating the dev-proxy behavior. `GATEWAY_URL` (default `http://gateway:8000`) controls where that proxy points - set it if the gateway isn't reachable at that hostname in your environment.
+- Postgres and Redis in `docker-compose.yml` use ephemeral/local volumes by default - point `DATABASE_URL`/`REDIS_URL` at managed instances for anything beyond local development.

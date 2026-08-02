@@ -1,5 +1,8 @@
 import pytest
-from apps.gateway.db.session import Base, check_database_connection, engine, get_db_session
+
+from apps.gateway.db.base import Base
+from apps.gateway.db.engine import check_database_connection, engine
+from apps.gateway.db.session import get_db_session
 
 
 @pytest.mark.asyncio

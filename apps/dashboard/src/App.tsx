@@ -1,6 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes } from "react-router";
 import { Layout } from "./components/Layout";
+import { RequireAuth } from "./components/RequireAuth";
+import { Login } from "./pages/Login";
 import { Overview } from "./pages/Overview";
 import { Providers } from "./pages/Providers";
 import { Models } from "./pages/Models";
@@ -25,7 +27,14 @@ export function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <Routes>
-          <Route element={<Layout />}>
+          <Route path="/login" element={<Login />} />
+          <Route
+            element={
+              <RequireAuth>
+                <Layout />
+              </RequireAuth>
+            }
+          >
             <Route index element={<Overview />} />
             <Route path="providers" element={<Providers />} />
             <Route path="models" element={<Models />} />

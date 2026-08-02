@@ -1,5 +1,4 @@
 from fastapi.testclient import TestClient
-import pytest
 
 from apps.gateway.main import app
 

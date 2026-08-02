@@ -1,5 +1,7 @@
 import asyncio
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
+
 import httpx
 
 from packages.shared.logging.logger import get_logger
@@ -10,7 +12,7 @@ logger = get_logger("retry_handler")
 TRANSIENT_STATUS_CODES = {429, 500, 502, 503, 504}
 
 
-async def retry_provider_call(func: Callable[[], Any], provider_name: str, config: Optional[RetryConfig] = None) -> Any:
+async def retry_provider_call(func: Callable[[], Any], provider_name: str, config: RetryConfig | None = None) -> Any:
     """Provider-aware retry (Epic 4.4): resolves per-provider max_retries/backoff from
     RetryConfig, then delegates to execute_with_exponential_backoff. This is the
     entrypoint provider plugins should use instead of calling
@@ -42,14 +44,12 @@ async def execute_with_exponential_backoff(
             attempt += 1
             status_code = getattr(getattr(e, "response", None), "status_code", None)
 
-            is_transient = (status_code in TRANSIENT_STATUS_CODES) if status_code else isinstance(
-                e, (httpx.NetworkError, httpx.TimeoutException)
+            is_transient = (
+                (status_code in TRANSIENT_STATUS_CODES) if status_code else isinstance(e, (httpx.NetworkError, httpx.TimeoutException))
             )
 
             if attempt > max_retries or not is_transient:
-                logger.error(
-                    f"Provider '{provider_name}' request failed permanently after {attempt} attempts (status={status_code}): {e}"
-                )
+                logger.error(f"Provider '{provider_name}' request failed permanently after {attempt} attempts (status={status_code}): {e}")
                 raise e
 
             sleep_duration = initial_backoff_sec * (backoff_factor ** (attempt - 1))

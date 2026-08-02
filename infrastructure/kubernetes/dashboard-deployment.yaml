@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: setu-dashboard
+  labels:
+    app: setu-dashboard
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: setu-dashboard
+  template:
+    metadata:
+      labels:
+        app: setu-dashboard
+    spec:
+      containers:
+        - name: dashboard
+          image: setu-dashboard:latest # build from infrastructure/docker/Dockerfile.dashboard and push to your registry
+          ports:
+            - containerPort: 3000
+          env:
+            # Must match gateway-service.yaml's Service name - nginx proxies /api/* here
+            # server-side (infrastructure/docker/nginx.dashboard.conf.template), so this
+            # is the in-cluster address, not what a browser would use.
+            - name: GATEWAY_URL
+              value: "http://setu-gateway:8000"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+            limits:
+              cpu: "500m"
+              memory: "128Mi"

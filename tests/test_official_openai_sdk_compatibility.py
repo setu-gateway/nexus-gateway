@@ -1,5 +1,4 @@
 from fastapi.testclient import TestClient
-import pytest
 
 from apps.gateway.main import app
 
@@ -66,7 +65,7 @@ def test_openai_sdk_streaming_chat_completion_compatibility():
     assert "text/event-stream" in resp.headers["content-type"]
 
     lines = [line.strip() for line in resp.text.split("\n") if line.strip()]
-    data_lines = [l for l in lines if l.startswith("data: ")]
+    data_lines = [line for line in lines if line.startswith("data: ")]
 
     assert len(data_lines) > 0
     assert data_lines[-1] == "data: [DONE]"

@@ -36,9 +36,7 @@ def test_load_retry_config_per_provider_env_var(tmp_path):
 
 def test_load_retry_config_from_yaml_file(tmp_path):
     yaml_path = tmp_path / "retry.yaml"
-    yaml_path.write_text(
-        "default:\n  max_retries: 5\nproviders:\n  ollama:\n    max_retries: 0\n"
-    )
+    yaml_path.write_text("default:\n  max_retries: 5\nproviders:\n  ollama:\n    max_retries: 0\n")
     config = load_retry_config(yaml_path=str(yaml_path))
     assert config.default.max_retries == 5
     assert config.for_provider("ollama").max_retries == 0

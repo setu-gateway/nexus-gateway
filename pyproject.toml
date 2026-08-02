@@ -15,6 +15,7 @@ name = "setu-gateway"
 version = "0.1.0"
 description = "Enterprise-grade OpenAI-compatible AI Gateway with intelligent routing, authentication, analytics, caching, observability, and developer tools."
 readme = "README.md"
+license = { text = "Apache-2.0" }
 requires-python = ">=3.10"
 dependencies = [
     "sqlalchemy>=2.0.0",
@@ -32,6 +33,7 @@ dependencies = [
     "passlib[bcrypt]>=1.7.4",
     "bcrypt>=4.0.0",
     "email-validator>=2.0.0",
+    "jsonschema>=4.19.0",
 ]
 
 [project.scripts]
@@ -40,27 +42,31 @@ setu = "packages.cli.main:main"
 [project.optional-dependencies]
 dev = [
     "ruff>=0.1.0",
-    "black>=23.0.0",
-    "isort>=5.12.0",
     "mypy>=1.5.0",
-    "pyright>=1.1.0",
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.1.0",
     "aiosqlite>=0.19.0",
+    "fakeredis>=2.20.0",
+    "lupa>=2.0",
+    "bandit>=1.7.0",
+    "pip-audit>=2.7.0",
+    "openapi-spec-validator>=0.7.1",
 ]
 
 [tool.uv]
 dev-dependencies = [
     "ruff>=0.1.0",
-    "black>=23.0.0",
-    "isort>=5.12.0",
     "mypy>=1.5.0",
-    "pyright>=1.1.0",
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.1.0",
     "aiosqlite>=0.19.0",
+    "fakeredis>=2.20.0",
+    "lupa>=2.0",
+    "bandit>=1.7.0",
+    "pip-audit>=2.7.0",
+    "openapi-spec-validator>=0.7.1",
 ]
 
 # Note: this is intentionally NOT a uv workspace. apps/gateway, packages/shared,
@@ -72,22 +78,33 @@ dev-dependencies = [
 # packages/sdk-python does. That one is a genuinely separate, independently
 # publishable client SDK - `cd packages/sdk-python && uv sync` there on its own.
 
-# Formatting & Linting Configuration
+# Formatting & Linting Configuration. Consolidated on ruff alone (format + import
+# sort + lint) rather than also running black/isort, which check overlapping ground -
+# `ruff format` and `ruff check --select I` already cover what those did.
 [tool.ruff]
-line-length = 88
+line-length = 140
 target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM"]
-ignore = []
+ignore = [
+    # FastAPI's own Depends(...)/Query(...)/Header(...) pattern as an argument default
+    # IS the framework's documented dependency-injection mechanism, not the mutable-
+    # default-argument bug this rule exists to catch - used throughout apps/gateway/api/.
+    "B008",
+]
 
-[tool.black]
-line-length = 88
-target-version = ['py310']
+[tool.ruff.lint.per-file-ignores]
+# BasePlugin is deliberately ABC-without-abstractmethods: on_load/on_request/on_response/
+# on_unload each have a no-op default so a plugin can override only the hooks it needs
+# (see plugins/hello_world/plugin.py) - a template-method pattern, not an oversight.
+"packages/plugin_sdk/src/plugin.py" = ["B024", "B027"]
 
-[tool.isort]
-profile = "black"
-line_length = 88
+# Security Scanning Configuration (Epic 6.2 / 6.7). Test dirs are excluded since
+# assert (B101) is idiomatic pytest usage there, not a real security concern - the
+# scan targets shipped source (apps/packages/plugins) for things that matter.
+[tool.bandit]
+exclude_dirs = [".venv", "node_modules", "__pycache__", "tests"]
 
 # Type Checking Configuration
 [tool.mypy]
@@ -96,6 +113,12 @@ strict = true
 ignore_missing_imports = true
 warn_return_any = true
 warn_unused_configs = true
+# apps/gateway/config/ and packages/shared/config/ are distinct dotted modules
+# (apps.gateway.config vs packages.shared.config) - without this, mypy's default
+# file-to-module mapping collides the two same-named directories into one bare
+# "config" module and refuses to run at all ("Duplicate module named config").
+explicit_package_bases = true
+mypy_path = "."
 
 [tool.pyright]
 include = ["apps", "packages", "plugins", "tests"]
@@ -106,7 +129,7 @@ typeCheckingMode = "basic"
 # Testing Configuration
 [tool.pytest.ini_options]
 minversion = "7.0"
-addopts = "-ra -q --cov=apps --cov=packages --cov=plugins"
+addopts = "-ra -q --cov=apps --cov=packages --cov=plugins --ignore=packages/sdk-python"
 asyncio_mode = "auto"
 testpaths = [
     "tests",

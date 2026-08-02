@@ -1,0 +1,34 @@
+server {
+    listen 3000;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Same routing the dev server's vite.config.ts proxy does: forward /api/* to the
+    # gateway and strip the /api prefix, so apps/dashboard/src/lib/api.ts's fetch("/api/...")
+    # calls work unchanged in production. GATEWAY_URL is substituted at container
+    # start (see Dockerfile.dashboard's ENTRYPOINT) - the official nginx image only
+    # expands variables that are actually set in the environment, so nginx's own
+    # built-in $uri/$host/etc. are left untouched.
+    location /api/ {
+        proxy_pass ${GATEWAY_URL}/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Client-side routing (react-router): any path that isn't a real static file
+    # falls back to index.html so deep links (e.g. /organizations) work on refresh.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+}

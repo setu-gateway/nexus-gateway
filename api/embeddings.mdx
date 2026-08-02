@@ -3,11 +3,9 @@ title: "Embeddings API"
 description: "OpenAI-compatible Embeddings endpoint spec."
 ---
 
-# `POST /v1/embeddings`
+OpenAI-compatible embeddings. Unlike chat completions, this endpoint resolves a single provider directly from the model catalog rather than building a full [routing](/features/routing) fallback chain - a scoped key's `allowed_providers`/`allowed_models` restriction still applies, and the request is still [rate-limited](/features/rate-limiting).
 
-Generates vector embeddings for a given text input.
-
-## Request Body
+## Request body
 
 ```json
 {
@@ -15,3 +13,20 @@ Generates vector embeddings for a given text input.
   "input": "The quick brown fox jumps over the lazy dog"
 }
 ```
+
+`input` accepts a single string or a list of strings.
+
+## Response
+
+```json
+{
+  "object": "list",
+  "data": [{"object": "embedding", "embedding": [0.0023, -0.009, ...], "index": 0}],
+  "model": "text-embedding-3-small",
+  "usage": {"prompt_tokens": 8, "total_tokens": 8}
+}
+```
+
+## Errors
+
+Same auth/permission (`embeddings` key permission)/rate-limit error shapes as [chat completions](/api/chat), plus `503` if no provider is available for the requested model at all (there's no fallback chain here to try alternates).

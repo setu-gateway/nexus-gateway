@@ -3,17 +3,40 @@ title: "Architecture Overview"
 description: "High-level system architecture of Setu Gateway."
 ---
 
-# Setu Gateway System Architecture
-
-Setu Gateway sits as a high-performance proxy layer between application clients and LLM providers.
+Setu Gateway is an HTTP proxy layer (FastAPI) between application clients and LLM
+providers, exposing an OpenAI-compatible API surface.
 
 ```
-Client Apps -> [ Auth & Rate Limiter ] -> [ Router & Plugins ] -> [ Caching Layer ] -> Provider Adapter -> LLM Provider
+Client -> Auth -> Routing Engine -> Rate Limiter -> Cache (memory/Redis/Postgres) -> Provider Plugin -> LLM Provider
 ```
 
-## Key Components
+The routing decision (which provider/model candidates to try, in what order) is made
+before rate limiting and the cache lookup, since rate limits are enforced per selected
+provider. A cache hit returns immediately after the cache lookup; a miss continues to
+the provider plugin, then writes the response back through all three cache tiers and
+records the request (analytics + Time Machine) before returning.
 
-- **Proxy Core**: Handles fast HTTP/gRPC parsing, body streaming, and request normalization.
-- **Plugin Engine**: Executes lifecycle hooks for authentication, billing, logging, and notifications.
-- **Cache Manager**: Provides exact and semantic Redis caching to bypass redundant LLM calls.
-- **Metrics Exporter**: Pushes real-time token, cost, and latency metrics to Prometheus and Grafana.
+## Key components
+
+- **Auth** (`apps/gateway/auth/`): scoped API keys, JWT-based session auth, and
+  per-key permission checks.
+- **Rate limiter** (`apps/gateway/ratelimit/`): Redis-backed token bucket, evaluated
+  via an atomic Lua script.
+- **Cache** (`apps/gateway/cache/`): three tiers - in-process memory, Redis, and
+  Postgres - keyed by an exact SHA-256 hash of the normalized request (model,
+  messages, and parameters). There is no semantic or embedding-based matching; two
+  prompts must be identical (after normalization) to share a cache entry.
+- **Routing engine** (`apps/gateway/routing/`): maps a requested model to a ranked
+  list of provider candidates and picks one per the active routing policy (for
+  example `highest_availability`, which ranks by each provider's tracked trust
+  score), with fallback across the rest of the chain on failure.
+- **Provider plugins** (`plugins/providers/`): one adapter per LLM provider,
+  translating between the OpenAI-compatible request/response shape and each
+  provider's native API.
+- **Analytics** (`apps/gateway/analytics/`): records every request (provider, model,
+  tokens, cost, latency, cache hit/miss) to Postgres, queryable via `GET
+  /analytics/requests` and `GET /analytics/summary`. There is no Prometheus/Grafana
+  integration - analytics are gateway-native, not exported as OpenTelemetry metrics.
+
+See [Request Flow](/architecture/request-flow), [Caching](/architecture/caching), and
+[Analytics](/architecture/analytics) for detail on each stage.

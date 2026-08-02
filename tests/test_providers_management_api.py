@@ -1,5 +1,5 @@
+from conftest import register_and_login
 from fastapi.testclient import TestClient
-import pytest
 
 from apps.gateway.main import app
 
@@ -38,7 +38,8 @@ def test_get_provider_health():
 
 
 def test_reload_providers_endpoint():
-    resp = client.post("/providers/reload")
+    _, headers = register_and_login(client)
+    resp = client.post("/providers/reload", headers=headers)
     assert resp.status_code == 200
     data = resp.json()
     assert "reloaded successfully" in data["message"]

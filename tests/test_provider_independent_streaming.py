@@ -1,5 +1,6 @@
 import asyncio
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
+
 import pytest
 
 from packages.plugin_sdk import ChatRequest
@@ -39,7 +40,7 @@ async def test_ollama_provider_independent_streaming():
 @pytest.mark.asyncio
 async def test_streaming_graceful_cancellation():
     async def cancelling_stream() -> AsyncGenerator[str, None]:
-        yield "data: {\"choices\": [{\"delta\": {\"content\": \"Chunk 1\"}}]}\n\n"
+        yield 'data: {"choices": [{"delta": {"content": "Chunk 1"}}]}\n\n'
         raise asyncio.CancelledError()
 
     safe_stream = safe_sse_stream_generator(cancelling_stream(), timeout_seconds=5.0, provider_name="test")

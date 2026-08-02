@@ -1,5 +1,5 @@
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import HTMLResponse
@@ -12,11 +12,11 @@ router = APIRouter(prefix="/playground", tags=["Provider Playground"])
 
 
 class PlaygroundRequest(BaseModel):
-    provider: Optional[str] = Field(default=None, description="Target provider name")
+    provider: str | None = Field(default=None, description="Target provider name")
     model: str = Field(description="Target model identifier")
     prompt: str = Field(description="User prompt text")
-    temperature: Optional[float] = 0.7
-    max_tokens: Optional[int] = 200
+    temperature: float | None = 0.7
+    max_tokens: int | None = 200
 
 
 class PlaygroundResponse(BaseModel):
@@ -24,7 +24,7 @@ class PlaygroundResponse(BaseModel):
     model: str
     raw_response: Any
     latency_ms: float
-    usage: Optional[Dict[str, int]] = None
+    usage: dict[str, int] | None = None
 
 
 @router.post("/completion", response_model=PlaygroundResponse)
@@ -71,7 +71,7 @@ async def run_playground_completion(req: PlaygroundRequest) -> PlaygroundRespons
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Playground request failed ({latency_ms}ms): {str(e)}",
-        )
+        ) from e
 
 
 PLAYGROUND_HTML_PAGE = """<!DOCTYPE html>
@@ -82,7 +82,10 @@ PLAYGROUND_HTML_PAGE = """<!DOCTYPE html>
     <title>Setu Gateway — Provider Playground</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+        rel="stylesheet"
+    >
     <style>
         :root {
             --bg: #0b0f17;
@@ -283,7 +286,8 @@ PLAYGROUND_HTML_PAGE = """<!DOCTYPE html>
 
             <div class="form-group">
                 <label>Prompt</label>
-                <textarea id="promptInput" placeholder="Enter prompt text here...">Explain Quantum Computing in 2 simple sentences.</textarea>
+                <textarea id="promptInput" placeholder="Enter prompt text here..."
+                    >Explain Quantum Computing in 2 simple sentences.</textarea>
             </div>
 
             <button class="btn-submit" onclick="runPrompt()">🚀 Send Request</button>

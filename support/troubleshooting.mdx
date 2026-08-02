@@ -1,0 +1,41 @@
+---
+title: "Troubleshooting"
+description: "Known limitations and fixes for common problems"
+---
+
+## `QueuePool limit ... connection timed out` under load
+
+The gateway's DB connection pool has a hard ceiling (`DB_POOL_SIZE + DB_MAX_OVERFLOW`, default 50) - every in-flight request holds a connection for its full duration, so this is a real ceiling on concurrent requests, not just a tuning knob. If you're seeing this, raise `DB_POOL_SIZE`/`DB_MAX_OVERFLOW` (see [Configuration](/deployment/configuration)) and check it against Postgres's own `max_connections` if you're running multiple gateway replicas. Full writeup: [PERFORMANCE.md](https://github.com/setu-gateway/nexus-gateway/blob/main/PERFORMANCE.md).
+
+A side effect of hitting this: analytics recording can fail *silently* under the same pressure (logged as a warning, not surfaced to the caller) - a successful response's request might be missing from `/analytics/requests` if the gateway was under heavy concurrent load at the time.
+
+## A provider "works" but always returns the same canned text
+
+If `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` / `GROQ_API_KEY` isn't set for the provider you're calling, every adapter falls back to a deterministic mock response rather than failing - this is intentional (see each [provider's page](/providers/openai)), so you can develop against the gateway without real credentials. If you're expecting real completions and getting `"... response for model '...'"` text back, the key isn't configured (or isn't being read - confirm it's in the gateway's actual environment, not just your shell's).
+
+## Streaming responses from Anthropic or Gemini aren't incremental
+
+Both adapters currently make a real (non-streaming) call and deliver the full answer as a single SSE chunk when `stream: true` is requested - their native streaming wire formats aren't translated chunk-by-chunk yet. You get a real, complete response either way; it just doesn't arrive token-by-token for these two providers specifically. OpenAI, Groq, and Ollama stream incrementally. See each provider's page for details.
+
+## A plugin's `on_request`/`on_response` hook never fires
+
+The generic plugin lifecycle (`BasePlugin.on_request`/`on_response`, distinct from `ProviderPlugin`'s `chat`/`embeddings`/etc.) has a loader (`apps/gateway/plugins/loader.py`) that can run it, but nothing in the gateway's request path calls that loader yet. See [Plugins Overview](/plugins/overview#an-important-caveat).
+
+## `X-Setu-Time-Machine: true` recorded nothing, and `/time-machine/{request_id}` 404s
+
+Two separate, common causes:
+
+1. **Using the wrong ID.** The chat completion response body's `id` field is the provider's own completion ID, not the gateway's `request_id` that `/time-machine/*` is keyed on. Send `X-Setu-Debug: true` alongside the Time Machine header and read `request_id` from the `X-Setu-Routing-Debug` **response header** (JSON) instead - see [Time Machine](/features/time-machine).
+2. **The response was a cache hit.** A cached response never reaches the code path that records to Time Machine, regardless of the header - use a prompt you know is fresh (or vary it) if you're testing this repeatedly with the same request.
+
+## Dashboard-management endpoints (organizations, keys, routing rules, webhooks, ...) have no auth
+
+This is accurate, not a misconfiguration on your end - these endpoints currently have no authentication enforcement at all, scoped only by whatever `organization_id`/`project_id` you pass. `apps/gateway/auth/rbac.py` defines roles/permissions for this but isn't wired to any route. Don't expose the gateway's management API to an untrusted network until this is addressed; put it behind your own access control (a reverse proxy with auth, a private network, a VPN) in the meantime. `/v1/*` traffic has its own, separate, real scoped-API-key system - see [Authentication](/api/authentication).
+
+## Tests or local runs behave differently than Postgres in production
+
+The test suite runs against SQLite (single-writer, no true concurrent-connection semantics), while production uses PostgreSQL. Concurrency-sensitive behavior (the connection pool limit above, for example) won't reproduce identically under SQLite - if you're debugging a concurrency issue, reproduce it against a real Postgres instance (`docker compose up -d postgres`), not the test database.
+
+## `/v1/images` or `/v1/audio` returns 404
+
+These aren't registered gateway routes. The provider plugin interface has `image()`/`audio()` methods, but no `/v1/images` or `/v1/audio` endpoint exposes them yet - only `/v1/chat/completions`, `/v1/embeddings`, and `/v1/models` are wired up.

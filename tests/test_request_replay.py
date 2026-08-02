@@ -1,7 +1,8 @@
 from unittest.mock import patch
 
-from fastapi.testclient import TestClient
 import pytest
+from conftest import register_and_login
+from fastapi.testclient import TestClient
 
 from apps.gateway.main import app
 from apps.gateway.providers.registry import ProviderRegistry
@@ -51,9 +52,11 @@ async def test_replay_request_reports_missing_provider_without_raising():
 
 
 def test_replay_endpoint_resolves_candidates_from_model():
+    _, headers = register_and_login(client)
     resp = client.post(
         "/routing/replay",
         json={"model": "gpt-4o", "messages": [{"role": "user", "content": "compare me"}]},
+        headers=headers,
     )
     assert resp.status_code == 200
     results = resp.json()["results"]
@@ -63,6 +66,7 @@ def test_replay_endpoint_resolves_candidates_from_model():
 
 
 def test_replay_endpoint_with_explicit_providers():
+    _, headers = register_and_login(client)
     resp = client.post(
         "/routing/replay",
         json={
@@ -70,6 +74,7 @@ def test_replay_endpoint_with_explicit_providers():
             "model": "gpt-4o",
             "messages": [{"role": "user", "content": "hi"}],
         },
+        headers=headers,
     )
     assert resp.status_code == 200
     providers = {r["provider"] for r in resp.json()["results"]}
@@ -77,15 +82,18 @@ def test_replay_endpoint_with_explicit_providers():
 
 
 def test_replay_endpoint_requires_model_or_providers():
-    resp = client.post("/routing/replay", json={"messages": [{"role": "user", "content": "hi"}]})
+    _, headers = register_and_login(client)
+    resp = client.post("/routing/replay", json={"messages": [{"role": "user", "content": "hi"}]}, headers=headers)
     assert resp.status_code == 400
 
 
 def test_replay_endpoint_one_provider_failing_does_not_block_others():
+    _, headers = register_and_login(client)
     with patch("plugins.providers.openai.plugin.OpenAIProviderPlugin.chat", side_effect=RuntimeError("boom")):
         resp = client.post(
             "/routing/replay",
             json={"model": "gpt-4o", "messages": [{"role": "user", "content": "hi"}]},
+            headers=headers,
         )
     assert resp.status_code == 200
     by_provider = {r["provider"]: r for r in resp.json()["results"]}
@@ -95,7 +103,8 @@ def test_replay_endpoint_one_provider_failing_does_not_block_others():
 
 
 def test_replay_is_not_recorded_to_analytics():
+    _, headers = register_and_login(client)
     before = client.get("/analytics/summary").json()["total_requests"]
-    client.post("/routing/replay", json={"model": "gpt-4o", "messages": [{"role": "user", "content": "hi"}]})
+    client.post("/routing/replay", json={"model": "gpt-4o", "messages": [{"role": "user", "content": "hi"}]}, headers=headers)
     after = client.get("/analytics/summary").json()["total_requests"]
     assert after == before

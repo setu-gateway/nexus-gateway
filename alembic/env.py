@@ -1,12 +1,12 @@
 import asyncio
-from logging.config import fileConfig
 import os
+from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+from alembic import context
 from apps.gateway.db import models  # noqa: F401 - registers every model's table on Base.metadata
 from apps.gateway.db.base import Base
 
@@ -17,10 +17,7 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-db_url = os.getenv(
-    "DATABASE_URL",
-    config.get_main_option("sqlalchemy.url", "postgresql://setu:setu_pass@localhost:5432/setu_db")
-)
+db_url = os.getenv("DATABASE_URL", config.get_main_option("sqlalchemy.url", "postgresql://setu:setu_pass@localhost:5432/setu_db"))
 if db_url.startswith("postgresql://"):
     db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 

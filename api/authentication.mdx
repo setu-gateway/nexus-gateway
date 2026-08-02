@@ -3,12 +3,59 @@ title: "API Authentication"
 description: "Authentication headers and security protocols for the REST API."
 ---
 
-# REST API Authentication
-
-All requests to Setu Gateway endpoints require authentication using standard HTTP Bearer headers:
+Authentication on `/v1/*` (chat, embeddings, models) and MCP tool-call endpoints is **optional, not required** - this is deliberate, not a gap: it's what lets the [quickstart](/getting-started/quickstart) and the dashboard's own unauthenticated calls work today. A key that *is* presented is still held to its scope; the gateway doesn't silently treat an invalid one as anonymous.
 
 ```http
-GET /v1/models HTTP/1.1
+POST /v1/chat/completions HTTP/1.1
 Host: localhost:8000
-Authorization: Bearer <API_KEY>
+Authorization: Bearer sk_setu_...
 ```
+
+## What happens with, and without, a key
+
+| | No `Authorization` header | Valid `Bearer sk_setu_...` | Malformed/revoked/expired key |
+|---|---|---|---|
+| Result | Request proceeds, unauthenticated | Request proceeds, scoped to the key's project/org/permissions | `401 Unauthorized` |
+
+A header that isn't `Bearer <token>` shaped at all (a different auth scheme) is treated the same as no header - it's not assumed to be a Setu key gone wrong.
+
+## Creating a key
+
+Keys are scoped to a project (`project_id`), not directly to an organization - create a [project](/getting-started/quickstart#create-and-use-a-scoped-api-key) first if you don't have one:
+
+```bash
+curl -X POST http://localhost:8000/keys \
+  -H "Content-Type: application/json" \
+  -d '{"project_id": "...", "name": "prod-key"}'
+```
+
+The response's `key` field (`sk_setu_...`) is shown exactly once - only its SHA-256 hash is stored, verified with a constant-time comparison. Losing it means creating a new one; there's no recovery endpoint.
+
+## Scoping a key
+
+```bash
+curl -X POST http://localhost:8000/keys \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "...",
+    "name": "restricted-key",
+    "permissions": ["chat", "models_read"],
+    "allowed_providers": ["openai"],
+    "allowed_models": ["gpt-4o"],
+    "allowed_ips": ["203.0.113.0/24"],
+    "rate_limit_per_minute": 60
+  }'
+```
+
+- **`permissions`** - one or more of `chat`, `embeddings`, `models_read`, `analytics_read`, `mcp_invoke`, `admin`. Omitted entirely, a key has no permission restrictions.
+- **`allowed_providers`** / **`allowed_models`** - restricts which [routing](/features/routing) candidates the key can ever be routed to, including as a fallback - never silently served by something outside the allowlist.
+- **`allowed_ips`** - CIDR-aware IP allowlist; fails closed on an unparseable entry.
+- **`rate_limit_per_minute`** - a sliding-window budget for this key specifically, on top of any [rate limit rules](/features/rate-limiting) that also match.
+
+## Revoking
+
+```bash
+curl -X DELETE http://localhost:8000/keys/{id}
+```
+
+Revocation is immediate and permanent - a revoked key's requests get `401` from that point on.

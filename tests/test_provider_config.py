@@ -1,9 +1,8 @@
 import os
 import tempfile
-import pytest
 
 from apps.gateway.db.models.provider_config import ProviderConfigModel
-from packages.shared.config.providers_config import ProviderSetting, ProvidersConfig, load_providers_config
+from packages.shared.config.providers_config import ProvidersConfig, load_providers_config
 
 
 def test_provider_config_db_model_instantiation():

@@ -1,11 +1,36 @@
 {
   "name": "@setu/sdk",
   "version": "0.1.0",
+  "description": "Official TypeScript/Node.js SDK for Setu Gateway",
+  "license": "Apache-2.0",
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "description": "Official TypeScript/Node.js SDK for Setu Gateway",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "setu",
+    "llm",
+    "ai-gateway",
+    "openai"
+  ],
   "scripts": {
-    "build": "echo 'Building TS SDK...'",
-    "test": "echo 'Testing TS SDK...'"
+    "build": "tsc",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^3.2.6"
   }
 }

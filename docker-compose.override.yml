@@ -1,0 +1,22 @@
+# Local-dev convenience layer, auto-merged by `docker compose` alongside
+# docker-compose.yml (no -f flags needed). Not used in production: the gateway image
+# itself still bakes in a fixed snapshot of the code (infrastructure/docker/Dockerfile.gateway
+# is unchanged) and that's exactly right for a deployed container.
+#
+# Without this file, `docker compose up -d gateway` serves whatever the image was
+# built with, indefinitely - editing apps/gateway/packages/plugins on the host has no
+# effect until someone runs `docker compose build gateway && docker compose up -d
+# --force-recreate gateway`. Bind-mounting the source over the image's baked-in copy,
+# combined with ENVIRONMENT=development (already the default - see
+# packages/shared/config/settings.py - restated here so this file's intent is clear
+# without cross-referencing it) turning on the --reload path apps/gateway/main.py's
+# start() already wires up, makes edits take effect on save, the same as the
+# from-source workflow in contributing/development.mdx.
+services:
+  gateway:
+    environment:
+      - ENVIRONMENT=development
+    volumes:
+      - ./apps/gateway:/app/apps/gateway
+      - ./packages:/app/packages
+      - ./plugins:/app/plugins

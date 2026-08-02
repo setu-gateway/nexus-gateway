@@ -1,11 +1,10 @@
 import platform
 import sys
-from typing import Any, Dict
 
 from fastapi import APIRouter, Response, status
 from pydantic import BaseModel
 
-from apps.gateway.db.session import check_database_connection
+from apps.gateway.db.engine import check_database_connection
 from apps.gateway.redis.client import check_redis_connection
 from packages.shared.config.settings import load_settings
 
@@ -15,12 +14,12 @@ router = APIRouter(tags=["Health"])
 class HealthResponse(BaseModel):
     status: str
     service: str
-    components: Dict[str, bool]
+    components: dict[str, bool]
 
 
 class ReadinessResponse(BaseModel):
     status: str
-    details: Dict[str, bool]
+    details: dict[str, bool]
 
 
 class LivenessResponse(BaseModel):

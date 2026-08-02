@@ -1,8 +1,7 @@
-from unittest.mock import AsyncMock, patch
-import uuid
+from unittest.mock import patch
 
+from conftest import register_and_login
 from fastapi.testclient import TestClient
-import pytest
 
 from apps.gateway.main import app
 
@@ -80,9 +79,7 @@ def test_v1_chat_completions_validation_and_errors():
 def test_v1_chat_completions_failover_on_provider_exception():
     """Epic 4.3: if the primary provider throws, the router retries a healthy
     same-tier equivalent instead of failing the whole request."""
-    with patch(
-        "plugins.providers.openai.plugin.OpenAIProviderPlugin.chat", side_effect=RuntimeError("Provider failed")
-    ):
+    with patch("plugins.providers.openai.plugin.OpenAIProviderPlugin.chat", side_effect=RuntimeError("Provider failed")):
         resp = client.post(
             "/v1/chat/completions",
             json={
@@ -147,7 +144,7 @@ def test_v1_chat_completions_debug_header_returns_routing_explanation():
 def test_v1_chat_completions_applies_organization_routing_rule():
     """Epic 4.2 end-to-end: a rule created via /routing-rules for an org actually
     changes what /v1/chat/completions does when that org's header is sent."""
-    org_id = str(uuid.uuid4())
+    org_id, headers = register_and_login(client)
     create_resp = client.post(
         "/routing-rules",
         json={
@@ -157,6 +154,7 @@ def test_v1_chat_completions_applies_organization_routing_rule():
             "action_type": "use",
             "action_provider": "ollama",
         },
+        headers=headers,
     )
     assert create_resp.status_code == 201
 
@@ -210,7 +208,7 @@ def test_v1_chat_completions_streaming_fails_over_before_first_chunk():
 
 
 def test_v1_chat_completions_rule_reject_returns_403():
-    org_id = str(uuid.uuid4())
+    org_id, headers = register_and_login(client)
     client.post(
         "/routing-rules",
         json={
@@ -219,6 +217,7 @@ def test_v1_chat_completions_rule_reject_returns_403():
             "condition_expression": "estimated_cost > 0.0001",
             "action_type": "reject",
         },
+        headers=headers,
     )
 
     resp = client.post(

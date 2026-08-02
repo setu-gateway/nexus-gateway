@@ -113,9 +113,7 @@ def test_cli_parser_defaults():
 
 def test_cli_parser_custom_flags():
     parser = _build_parser()
-    args = parser.parse_args(
-        ["benchmark", "--url", "http://example.com", "--providers", "openai,groq", "--requests", "5", "--stream"]
-    )
+    args = parser.parse_args(["benchmark", "--url", "http://example.com", "--providers", "openai,groq", "--requests", "5", "--stream"])
     assert args.url == "http://example.com"
     assert args.providers == "openai,groq"
     assert args.requests == 5

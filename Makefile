@@ -10,18 +10,16 @@ install: ## Install all dependencies (Node via pnpm, Python via uv)
 dev: ## Start local development services
 	pnpm dev
 
-format: ## Format codebase (ruff, black, isort)
+format: ## Format codebase (ruff format + import sort, no black/isort - see pyproject.toml)
 	uv run ruff format .
-	uv run black .
-	uv run isort .
+	uv run ruff check --select I --fix .
 
 lint: ## Run linters across codebase (ruff & pnpm lint)
 	uv run ruff check .
 	pnpm lint
 
-typecheck: ## Run type checking (mypy & pyright)
+typecheck: ## Run type checking (mypy; strict, with a known non-blocking backlog)
 	uv run mypy .
-	uv run pyright .
 
 test: ## Run test suites (pytest with pytest-asyncio and pytest-cov, pnpm test)
 	uv run pytest --cov

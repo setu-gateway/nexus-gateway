@@ -1,11 +1,10 @@
-from datetime import datetime, timezone
-from typing import Dict, List, Optional
 import asyncio
 import math
+from datetime import datetime, timezone
+
 from pydantic import BaseModel, Field
 
 from apps.gateway.providers.registry import ProviderRegistry
-from packages.plugin_sdk import ProviderHealthResponse
 from packages.shared.logging.logger import get_logger
 
 logger = get_logger("provider_health_monitor")
@@ -16,15 +15,15 @@ class ProviderHealthMetric(BaseModel):
 
     provider_name: str
     status: str = "online"  # "online", "degraded", "offline"
-    latency_ms: Optional[float] = 0.0
+    latency_ms: float | None = 0.0
     success_rate: float = 100.0  # 0.0 - 100.0%
     error_rate: float = 0.0  # 0.0 - 100.0%
     availability_score: float = 100.0  # 0.0 - 100.0%
     total_requests: int = 0
     total_errors: int = 0
     total_successes: int = 0
-    last_successful_request: Optional[datetime] = None
-    rate_limit_remaining: Optional[int] = 1000
+    last_successful_request: datetime | None = None
+    rate_limit_remaining: int | None = 1000
     is_rate_limited: bool = False
     last_checked_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -51,9 +50,9 @@ class ProviderHealthMonitor:
 
     def __init__(self, registry: ProviderRegistry):
         self.registry = registry
-        self._metrics: Dict[str, ProviderHealthMetric] = {}
+        self._metrics: dict[str, ProviderHealthMetric] = {}
         self._is_running: bool = False
-        self._monitor_task: Optional[asyncio.Task] = None
+        self._monitor_task: asyncio.Task | None = None
 
     def get_metrics(self, provider_name: str) -> ProviderHealthMetric:
         """Get metric snapshot for a given provider."""
@@ -103,7 +102,7 @@ class ProviderHealthMonitor:
         else:
             metric.status = "online"
 
-    async def run_health_check_round(self) -> Dict[str, ProviderHealthMetric]:
+    async def run_health_check_round(self) -> dict[str, ProviderHealthMetric]:
         """Perform a background polling round across all providers."""
         health_responses = await self.registry.check_all_health()
 
@@ -127,7 +126,7 @@ class ProviderHealthMonitor:
         """Convenience accessor: current trust score for a single provider."""
         return self.get_metrics(provider_name).trust_score()
 
-    def get_healthiest_provider(self, candidates: List[str]) -> Optional[str]:
+    def get_healthiest_provider(self, candidates: list[str]) -> str | None:
         """Select the healthiest provider from candidates based on status, error rate, and latency."""
         eligible = []
         for name in candidates:

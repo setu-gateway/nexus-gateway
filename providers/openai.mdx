@@ -3,21 +3,32 @@ title: "OpenAI Provider"
 description: "Configuring OpenAI models in Setu Gateway."
 ---
 
-# OpenAI Provider Setup
-
-Setu Gateway natively proxies OpenAI endpoints including Chat Completions, Embeddings, and Image Generation.
+The OpenAI adapter (`plugins/providers/openai/plugin.py`) makes real calls to `api.openai.com` for chat completions (streaming and non-streaming) and embeddings, with automatic retry on transient failures.
 
 ## Setup
-
-Set your OpenAI API key in your environment:
 
 ```bash
 OPENAI_API_KEY=sk-...
 ```
 
-## Supported Models
+Enabled by default; no key required to use it - see [Mock fallback](#mock-fallback-with-no-key) below.
 
-- `gpt-4o`
-- `gpt-4o-mini`
-- `o1-preview`
-- `text-embedding-3-small`
+## Catalog models
+
+These are registered in `apps/gateway/models/catalog.py`, which is what makes them eligible for [routing](/features/routing)'s fallback-chain and same-tier-equivalent logic:
+
+| Model ID | Tier | Notes |
+|---|---|---|
+| `gpt-4o` | flagship | Vision-capable |
+| `gpt-4o-mini` | fast | Vision-capable |
+| `text-embedding-3-small` | embedding | |
+
+Any other OpenAI model string (e.g. `gpt-4-turbo`, `o1-preview`) still works - unlisted models fall back to being treated as OpenAI models directly - but won't participate in cross-provider fallback or the catalog's cost estimation.
+
+## Mock fallback with no key
+
+Without `OPENAI_API_KEY` set, `chat()`/`embeddings()` return a deterministic mock response instead of failing - useful for developing against the gateway without real credentials or cost. The mock response is clearly labeled (`"OpenAI Reference Provider response for model '...'"`), not indistinguishable from a real one.
+
+## Not implemented
+
+Image generation and audio transcription/speech are defined in the plugin interface but return `{"error": "..."}` for OpenAI (and every other provider) - `/v1/images` and `/v1/audio` aren't registered gateway routes yet, only `/v1/chat/completions`, `/v1/embeddings`, and `/v1/models`.

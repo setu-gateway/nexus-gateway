@@ -1,4 +1,3 @@
-from typing import Dict, List, Optional, Tuple
 from pydantic import BaseModel, Field
 
 from packages.shared.logging.logger import get_logger
@@ -20,8 +19,7 @@ class ModelDefinition(BaseModel):
     supports_embeddings: bool = Field(default=False, description="Is a vector embedding model")
     tier: str = Field(
         default="fast",
-        description="Rough capability class used for cross-provider fallback equivalence: "
-        "'flagship', 'fast', or 'embedding'",
+        description="Rough capability class used for cross-provider fallback equivalence: 'flagship', 'fast', or 'embedding'",
     )
     input_cost_per_1k: float = Field(
         default=0.0, ge=0.0, description="Approximate USD cost per 1K input tokens (0 for self-hosted/free models)"
@@ -34,8 +32,7 @@ class ModelDefinition(BaseModel):
         """Estimate request cost in USD from token counts. Pricing is illustrative and
         should be kept in sync with each provider's published pricing page."""
         return round(
-            (input_tokens / 1000.0) * self.input_cost_per_1k
-            + (output_tokens / 1000.0) * self.output_cost_per_1k,
+            (input_tokens / 1000.0) * self.input_cost_per_1k + (output_tokens / 1000.0) * self.output_cost_per_1k,
             6,
         )
 
@@ -44,7 +41,7 @@ class ModelRegistry:
     """Unified Model Catalog and Translation Registry for Setu Gateway."""
 
     def __init__(self):
-        self._catalog: Dict[str, ModelDefinition] = {}
+        self._catalog: dict[str, ModelDefinition] = {}
         self._load_default_catalog()
 
     def _load_default_catalog(self) -> None:
@@ -191,11 +188,11 @@ class ModelRegistry:
         self._catalog[key] = model
         logger.info(f"Registered model '{model.display_name}' ({key}) -> provider '{model.provider_name}'")
 
-    def get_model(self, model_id: str) -> Optional[ModelDefinition]:
+    def get_model(self, model_id: str) -> ModelDefinition | None:
         """Get model definition by unified model ID."""
         return self._catalog.get(model_id.lower())
 
-    def resolve_provider_model(self, unified_model_id: str) -> Tuple[str, str]:
+    def resolve_provider_model(self, unified_model_id: str) -> tuple[str, str]:
         """Resolve a unified model ID into (provider_name, provider_model_id)."""
         key = unified_model_id.lower()
         model_def = self._catalog.get(key)
@@ -205,7 +202,7 @@ class ModelRegistry:
         # Fallback: Treat raw string as OpenAI provider model if unlisted
         return "openai", unified_model_id
 
-    def list_models(self, provider_name: Optional[str] = None) -> List[ModelDefinition]:
+    def list_models(self, provider_name: str | None = None) -> list[ModelDefinition]:
         """List models in the catalog, optionally filtered by provider."""
         models = list(self._catalog.values())
         if provider_name:
@@ -213,7 +210,7 @@ class ModelRegistry:
             models = [m for m in models if m.provider_name == target_prov]
         return models
 
-    def find_equivalents(self, model_id: str, require_vision: Optional[bool] = None) -> List[ModelDefinition]:
+    def find_equivalents(self, model_id: str, require_vision: bool | None = None) -> list[ModelDefinition]:
         """Find same-tier models from OTHER providers, for cross-provider routing fallback.
 
         Used when the primary provider for a requested model is unavailable: the router
@@ -229,9 +226,7 @@ class ModelRegistry:
         candidates = [
             m
             for m in self._catalog.values()
-            if m.provider_name != primary.provider_name
-            and m.tier == primary.tier
-            and m.supports_embeddings == primary.supports_embeddings
+            if m.provider_name != primary.provider_name and m.tier == primary.tier and m.supports_embeddings == primary.supports_embeddings
         ]
         if require_vision or (require_vision is None and primary.supports_vision):
             candidates = [m for m in candidates if m.supports_vision]

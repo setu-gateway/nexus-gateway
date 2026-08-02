@@ -1,4 +1,4 @@
-FROM node:20-alpine as base
+FROM node:20-alpine AS build
 
 WORKDIR /app
 
@@ -9,7 +9,21 @@ COPY apps/dashboard ./apps/dashboard
 COPY packages ./packages
 
 RUN pnpm install --frozen-lockfile
+RUN pnpm --filter @setu/dashboard build
+
+# A production container should serve the static build vite produces, not run vite's
+# own dev server (no HMR websocket, no unauthenticated filesystem access via the dev
+# server's module graph - see pnpm audit findings on vite <6.4.3/esbuild <0.25 during
+# Sprint 6's security audit). nginx replicates vite.config.ts's dev-only /api proxy so
+# apps/dashboard/src/lib/api.ts's relative fetch("/api/...") calls keep working.
+FROM nginx:1.27-alpine AS serve
+
+COPY --from=build /app/apps/dashboard/dist /usr/share/nginx/html
+COPY infrastructure/docker/nginx.dashboard.conf.template /etc/nginx/templates/default.conf.template
+
+ENV GATEWAY_URL=http://gateway:8000
 
 EXPOSE 3000
 
-CMD ["pnpm", "--filter", "@setu/dashboard", "dev"]
+HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget -qO- http://localhost:3000/ >/dev/null || exit 1

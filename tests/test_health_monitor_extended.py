@@ -1,8 +1,9 @@
 import asyncio
+
 import pytest
 
-from apps.gateway.providers import ProviderCapabilities, ProviderHealthMonitor, ProviderRegistry
-from plugins.providers import OpenAIProviderPlugin, OllamaProviderPlugin
+from apps.gateway.providers import ProviderHealthMonitor, ProviderRegistry
+from plugins.providers import OpenAIProviderPlugin
 
 
 @pytest.mark.asyncio

@@ -3,11 +3,9 @@ title: "Chat Completions API"
 description: "OpenAI-compatible Chat Completions endpoint spec."
 ---
 
-# `POST /v1/chat/completions`
+OpenAI-compatible chat completions - point an existing OpenAI SDK at Setu and this is the endpoint it calls. See [Routing](/features/routing) and [Caching](/features/caching) for what happens between the request arriving and a response coming back.
 
-Generates model completions for a sequence of conversation messages.
-
-## Request Body
+## Request body
 
 ```json
 {
@@ -17,6 +15,47 @@ Generates model completions for a sequence of conversation messages.
     { "role": "user", "content": "Explain quantum computing in one sentence." }
   ],
   "temperature": 0.7,
-  "stream": false
+  "top_p": 1.0,
+  "max_tokens": null,
+  "stream": false,
+  "stop": null
 }
 ```
+
+`messages` is required; everything else is optional. `tools` (OpenAI-format function definitions) is accepted and included in the [cache](/features/caching) key, but not yet forwarded to providers - defining tools doesn't currently produce tool calls in the response.
+
+## Response (non-streaming)
+
+```json
+{
+  "id": "chatcmpl-...",
+  "object": "chat.completion",
+  "model": "gpt-4o",
+  "choices": [{"index": 0, "message": {"role": "assistant", "content": "..."}, "finish_reason": "stop"}],
+  "usage": {"prompt_tokens": 12, "completion_tokens": 20, "total_tokens": 32}
+}
+```
+
+## Streaming
+
+`"stream": true` returns Server-Sent Events (`text/event-stream`), each a `data: {...}` chunk in OpenAI's delta format, terminated with `data: [DONE]`.
+
+## Useful request headers
+
+| Header | Effect |
+|---|---|
+| `Authorization: Bearer sk_setu_...` | Optional - see [Authentication](/api/authentication) |
+| `X-Setu-Debug: true` | Adds an `X-Setu-Routing-Debug` response header with the full routing decision |
+| `X-Setu-Routing-Policy: <policy>` | Overrides the default routing policy for this request - see [Routing](/features/routing) |
+| `X-Setu-Time-Machine: true` | Records this request/response for later replay - see [Time Machine](/features/time-machine) |
+| `X-Setu-Organization-Id: <id>` | Fallback org attribution when no API key is presented |
+
+## Errors
+
+| Status | Meaning |
+|---|---|
+| `400` | Missing `messages`, unknown routing policy, or invalid organization ID |
+| `401` | A Bearer key was presented but is invalid, revoked, or expired |
+| `403` | Missing key permission, org routing rule rejected the request, or the key's provider/model allowlist excludes every candidate |
+| `429` | Rate limit exceeded - see [Rate Limiting](/features/rate-limiting) |
+| `503` | Every provider in the routing fallback chain failed |

@@ -1,0 +1,22 @@
+{
+  "name": "@setu/examples",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "basic-chat": "tsx 01-basic-chat.ts",
+    "streaming": "tsx 02-streaming.ts",
+    "embeddings": "tsx 03-embeddings.ts",
+    "multi-provider-routing": "tsx 04-multi-provider-routing.ts",
+    "time-machine-replay": "tsx 05-time-machine-replay.ts",
+    "provider-comparison": "tsx 06-provider-comparison.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@setu/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.3"
+  }
+}

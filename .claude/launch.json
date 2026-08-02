@@ -7,6 +7,12 @@
       "runtimeArgs": ["--prefix", "apps/dashboard", "run", "dev", "--", "--host"],
       "port": 3000,
       "autoPort": true
+    },
+    {
+      "name": "gateway",
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": ["-m", "uvicorn", "apps.gateway.main:app", "--host", "0.0.0.0", "--port", "8000"],
+      "port": 8000
     }
   ]
 }

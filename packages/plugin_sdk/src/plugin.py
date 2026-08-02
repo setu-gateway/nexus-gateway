@@ -1,5 +1,6 @@
 from abc import ABC
-from typing import Any, Dict, Optional
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -9,9 +10,9 @@ class PluginContext(BaseModel):
     request_id: str = ""
     trace_id: str = ""
     path: str = ""
-    headers: Dict[str, str] = Field(default_factory=dict)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-    state: Dict[str, Any] = Field(default_factory=dict)
+    headers: dict[str, str] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    state: dict[str, Any] = Field(default_factory=dict)
 
 
 class BasePlugin(ABC):
@@ -21,7 +22,7 @@ class BasePlugin(ABC):
     version: str = "0.1.0"
     description: str = "Base plugin interface"
 
-    async def on_load(self, context: Optional[PluginContext] = None) -> None:
+    async def on_load(self, context: PluginContext | None = None) -> None:
         """Invoked when the plugin is loaded into the gateway."""
         pass
 

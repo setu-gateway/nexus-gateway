@@ -1,5 +1,7 @@
-from typing import Any, AsyncGenerator, Dict, List, Optional
 import json
+from collections.abc import AsyncGenerator
+from typing import Any
+
 import httpx
 
 from packages.plugin_sdk import (
@@ -24,12 +26,12 @@ class OpenAIProviderPlugin(ProviderPlugin):
     name: str = "OpenAI Reference Provider Adapter"
     provider_name: str = "openai"
 
-    def __init__(self, api_key: Optional[str] = None, base_url: str = "https://api.openai.com/v1"):
+    def __init__(self, api_key: str | None = None, base_url: str = "https://api.openai.com/v1"):
         settings = load_settings()
         self.api_key = api_key or (settings.openai_api_key.get_secret_value() if settings.openai_api_key else None)
         self.base_url = base_url.rstrip("/")
 
-    def _get_headers(self) -> Dict[str, str]:
+    def _get_headers(self) -> dict[str, str]:
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
@@ -98,14 +100,16 @@ class OpenAIProviderPlugin(ProviderPlugin):
         payload = request.model_dump(exclude_none=True)
         payload["stream"] = True
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            async with client.stream("POST", url, json=payload, headers=self._get_headers()) as resp:
-                resp.raise_for_status()
-                async for line in resp.aiter_lines():
-                    if line:
-                        yield f"{line}\n\n"
+        async with (
+            httpx.AsyncClient(timeout=60.0) as client,
+            client.stream("POST", url, json=payload, headers=self._get_headers()) as resp,
+        ):
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                if line:
+                    yield f"{line}\n\n"
 
-    async def embeddings(self, request: EmbeddingRequest) -> Dict[str, Any]:
+    async def embeddings(self, request: EmbeddingRequest) -> dict[str, Any]:
         """Generate text vector embeddings with OpenAI."""
         if not self.api_key:
             return {
@@ -126,7 +130,7 @@ class OpenAIProviderPlugin(ProviderPlugin):
 
         return await retry_provider_call(_call_embed, provider_name=self.provider_name)
 
-    async def image(self, request: ImageRequest) -> Dict[str, Any]:
+    async def image(self, request: ImageRequest) -> dict[str, Any]:
         """Generate images using OpenAI DALL-E."""
         if not self.api_key:
             return {
@@ -142,7 +146,7 @@ class OpenAIProviderPlugin(ProviderPlugin):
             resp.raise_for_status()
             return resp.json()
 
-    async def audio(self, request: AudioRequest) -> Dict[str, Any]:
+    async def audio(self, request: AudioRequest) -> dict[str, Any]:
         """Transcribe audio using OpenAI Whisper."""
         if not self.api_key:
             return {"text": "OpenAI reference audio transcription stub"}

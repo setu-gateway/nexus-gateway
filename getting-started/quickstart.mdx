@@ -3,35 +3,76 @@ title: "Quickstart"
 description: "Send your first API request through Setu Gateway."
 ---
 
-# Quickstart Guide
+This assumes a gateway is already running at `http://localhost:8000` - see [Installation](/getting-started/installation) if not.
 
-Follow this guide to send your first chat completion request through Setu Gateway.
+There are two separate API keys in play here, easy to mix up:
 
-## Step 1: Set your Provider API Key
+- **Your provider's key** (`OPENAI_API_KEY`, etc.) - a server-side secret the gateway uses to call the upstream provider. You (or whoever runs the gateway) set this in `.env`; your applications never see it.
+- **A Setu API key** (`sk_setu_...`) - what *your* applications present to authenticate *to the gateway*. Presenting one is optional (see [Authentication](/api/authentication)) - the fastest way to try the gateway is without one at all.
 
-Configure your upstream provider API key in your environment:
+## Send a request with no auth
 
-```bash
-export OPENAI_API_KEY="your-openai-api-key"
-```
-
-## Step 2: Send a Request
-
-Send a request using cURL pointing to your Setu Gateway instance:
+If no provider key is configured, `gpt-4o` still works - the OpenAI adapter returns a deterministic mock response instead of calling the real API, so this works out of the box:
 
 ```bash
 curl http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $OPENAI_API_KEY" \
   -d '{
     "model": "gpt-4o",
-    "messages": [
-      {
-        "role": "user",
-        "content": "Hello Setu Gateway!"
-      }
-    ]
+    "messages": [{"role": "user", "content": "Hello Setu Gateway!"}]
   }'
 ```
 
-You will receive an OpenAI-compatible JSON response routed through Setu Gateway.
+```json
+{
+  "id": "chatcmpl-openai-ref-mock",
+  "object": "chat.completion",
+  "model": "gpt-4o",
+  "choices": [{"index": 0, "message": {"role": "assistant", "content": "OpenAI Reference Provider response for model 'gpt-4o'"}, "finish_reason": "stop"}],
+  "usage": {"prompt_tokens": 10, "completion_tokens": 12, "total_tokens": 22}
+}
+```
+
+Set a real `OPENAI_API_KEY` (or `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`) in the gateway's `.env` and restart it to get real completions instead of the mock response.
+
+## Create and use a scoped API key
+
+For anything beyond local experimentation, create an organization, a project within it, and a key scoped to that project - so requests are attributed, rate-limited, and permission-checked per key. Keys are scoped to a project (`project_id`), not directly to an organization:
+
+```bash
+ORG_ID=$(curl -s -X POST http://localhost:8000/organizations \
+  -H "Content-Type: application/json" -d '{"name": "My Org"}' | python3 -c "import json,sys;print(json.load(sys.stdin)['id'])")
+
+PROJECT_ID=$(curl -s -X POST http://localhost:8000/projects \
+  -H "Content-Type: application/json" -d "{\"organization_id\": \"$ORG_ID\", \"name\": \"My Project\"}" \
+  | python3 -c "import json,sys;print(json.load(sys.stdin)['id'])")
+
+curl -s -X POST http://localhost:8000/keys \
+  -H "Content-Type: application/json" \
+  -d "{\"project_id\": \"$PROJECT_ID\", \"name\": \"quickstart-key\"}"
+```
+
+The response includes `key` (the plaintext `sk_setu_...` value) exactly once - it's hashed at rest and never shown again. Use it as a Bearer token:
+
+```bash
+curl http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer sk_setu_..." \
+  -d '{"model": "gpt-4o", "messages": [{"role": "user", "content": "Hello Setu Gateway!"}]}'
+```
+
+## Streaming
+
+Add `"stream": true` to get Server-Sent Events instead of a single JSON body:
+
+```bash
+curl http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model": "gpt-4o", "messages": [{"role": "user", "content": "Count to 3"}], "stream": true}'
+```
+
+## Next steps
+
+- [Routing](/features/routing) - how the gateway picks a provider and fails over.
+- [Python SDK](/sdk/python) / [TypeScript SDK](/sdk/typescript) - typed clients instead of raw HTTP.
+- [CLI](/cli/installation) - `setu doctor`, `setu health`, `setu replay` for diagnostics from the terminal.

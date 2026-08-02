@@ -1,13 +1,32 @@
 ---
 title: "Caching Mechanism"
-description: "Exact match and semantic vector caching in Setu Gateway."
+description: "Exact-match tiered caching in Setu Gateway."
 ---
 
-# Response Caching Architecture
+Setu Gateway caches chat completion responses to skip redundant, identical calls to
+an upstream provider. Caching is exact-match only - there is no semantic or
+embedding-based similarity matching. Two requests share a cache entry only if their
+normalized model, messages, and parameters produce the same SHA-256 hash
+(`apps/gateway/cache/keys.py`).
 
-Reduce model latency from 1.5s to < 10ms and save provider costs by caching prompt completions.
+## Three tiers
 
-## Cache Types
+`CacheManager` (`apps/gateway/cache/manager.py`) checks and writes, in order:
 
-- **Exact Match Caching**: Keyed by SHA-256 hash of model name, prompt messages, and parameters.
-- **Semantic Caching**: Uses vector similarity embeddings to match conceptually identical prompts.
+1. **In-process memory** - a small hot-key cache local to each gateway instance.
+   Fastest, but not shared across replicas and not scoped per-project.
+2. **Redis** - shared across all gateway instances.
+3. **Postgres** - the persistent source of truth; also what powers cache-hit
+   analytics and lets a fresh gateway instance still get hits Redis has evicted.
+
+A lookup checks memory, then Redis, then Postgres, returning on the first hit. A
+write goes to all three; if Redis is unavailable, the memory and Postgres writes
+still succeed (and vice versa) - each tier fails independently rather than as an
+all-or-nothing transaction.
+
+## Caveats
+
+- A cache hit short-circuits before the routing engine's fallback chain runs and
+  before the Time Machine recording step, so `X-Setu-Time-Machine: true` has no
+  effect on a cached response - only a genuine upstream call gets recorded.
+- Caching can be disabled per-project; a disabled project bypasses all three tiers.

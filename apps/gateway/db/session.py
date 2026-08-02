@@ -1,8 +1,8 @@
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
+
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from apps.gateway.db.base import Base
-from apps.gateway.db.engine import check_database_connection, engine
+from apps.gateway.db.engine import engine
 
 async_session_factory = async_sessionmaker(
     bind=engine,

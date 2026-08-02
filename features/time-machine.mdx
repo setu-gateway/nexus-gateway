@@ -1,0 +1,44 @@
+---
+title: "Time Machine"
+description: "Record a request/response pair and replay it later, against the same or a different provider"
+---
+
+Time Machine records the full request (messages, params) and response for a chat completion, then lets you replay it later - against the original provider (to check for drift over time) or a different one (to compare outputs) - and see a similarity diff between the original and replayed response text.
+
+## Recording
+
+Opt in per request with `X-Setu-Time-Machine: true`. Nothing is recorded unless this header is present - it isn't on by default, so routine traffic doesn't silently accumulate stored request/response bodies.
+
+```bash
+curl http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "X-Setu-Time-Machine: true" \
+  -H "X-Setu-Debug: true" \
+  -d '{"model": "gpt-4o", "messages": [{"role": "user", "content": "Explain routing in one sentence."}]}'
+```
+
+The gateway's own `request_id` (what `/time-machine/*` is keyed on) is **not** the response body's `id` field - that's the provider's own completion ID and isn't usable for lookup. By default `request_id` isn't returned to the caller at all; also sending `X-Setu-Debug: true` surfaces it in the `X-Setu-Routing-Debug` **response header** (not the body) as JSON - parse `request_id` out of that.
+
+A cache hit never records to Time Machine, regardless of this header - a cache hit is short-circuited before the code path that writes a Time Machine entry runs at all (see [Caching](/features/caching)), since nothing new happened for this specific request to record. If you're testing this and the prompt you're using has been sent before, you'll silently get no record - use a prompt you know is fresh, or vary it (e.g. append a random token) if you're re-running the same request repeatedly.
+
+## Listing and inspecting records
+
+```bash
+curl http://localhost:8000/time-machine                          # list, filterable by organization_id/project_id
+curl http://localhost:8000/time-machine/{request_id}              # one record's full stored request + response
+```
+
+## Replaying
+
+```bash
+curl -X POST http://localhost:8000/time-machine/{request_id}/replay
+curl -X POST "http://localhost:8000/time-machine/{request_id}/replay?provider=gemini"
+```
+
+Without `?provider=`, it replays against the *same* provider and upstream model that served the original request - useful for checking whether a model's behavior has drifted. With a different provider, the gateway looks up a same-tier equivalent model from the catalog and replays against that instead, then returns both response texts plus a similarity ratio (Python's `difflib.SequenceMatcher`) between them.
+
+Replay is a live call to the provider - it doesn't read from cache and doesn't get cached itself. It also isn't recorded to analytics (`request_logs`), so replaying doesn't skew your usage numbers.
+
+## What gets stored
+
+`request_messages`, `request_params` (temperature/top_p/max_tokens/stop), the full `response_body`, `latency_ms`, and `estimated_cost` - everything needed to replay the exact same call later, plus enough to inspect what actually happened without re-running it.

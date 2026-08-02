@@ -1,0 +1,29 @@
+---
+title: "Analytics"
+description: "Usage analytics: request-level history and aggregate summaries"
+---
+
+Every `/v1/chat/completions` call - success, error, cache hit, or all-providers-failed - is recorded to `request_logs`, backing two read endpoints. Recording happens on its own database session, off the response's critical path, so a slow analytics write never adds latency to the API call itself.
+
+## Request-level history
+
+```bash
+curl "http://localhost:8000/analytics/requests?organization_id=...&status=error&limit=50"
+```
+
+Filters: `organization_id`, `project_id`, `provider`, `model`, `status` (`success`/`error`), `since`/`until`, `limit` (default 50, max 500), `offset`. Each row includes the full per-stage timeline (`routed` → `cache_hit`/`completed`/`rate_limited`/`routing_failed`, with timestamps) - useful for seeing exactly where a specific slow or failed request spent its time.
+
+## Aggregate summary
+
+```bash
+curl "http://localhost:8000/analytics/summary?organization_id=...&since=2026-01-01T00:00:00Z"
+```
+
+Same filters as above, plus `model` and `top_models_limit` (default 10). Returns totals (`total_requests`, `error_rate`, `avg_latency_ms`, `total_estimated_cost`, `total_tokens`, `cache_hit_rate`, `fallback_rate`) computed as SQL-side aggregates - not by pulling every matching row into Python - so this stays cheap as `request_logs` grows, plus two breakdowns:
+
+- `by_provider` - requests, errors, avg latency, and total cost per provider that actually served a request.
+- `top_models` - the same, grouped by requested model, ranked by request count and capped at `top_models_limit`.
+
+## What's cheap vs. what isn't recorded
+
+A cache hit is still recorded (`cache_hit: true`, `estimated_cost: 0.0`) since it's still a real, billable-in-the-usual-sense request from the caller's perspective. [Time Machine](/features/time-machine) replays are explicitly *not* recorded here, so replaying a stored request for debugging doesn't skew your usage numbers.

@@ -1,0 +1,56 @@
+---
+title: "Webhooks"
+description: "Subscribe to gateway events with HMAC-signed, retried HTTP callbacks"
+---
+
+Register an HTTPS endpoint to receive real-time notifications for gateway events - request completion, API key lifecycle, quota thresholds - instead of polling.
+
+## Event types
+
+| Event | Fires when |
+|---|---|
+| `request.completed` | A chat completion succeeds |
+| `request.failed` | A chat completion errors out (all providers failed, routing rejected, etc.) |
+| `key.created` | A scoped API key is created |
+| `key.revoked` | A scoped API key is revoked |
+| `project.created` | A project is created |
+| `quota.exceeded` | An organization crosses its configured request or spend quota |
+
+`quota.exceeded` fires exactly once per crossing (the request that pushes usage from `quota` to `quota + 1`), not on every subsequent request while over quota.
+
+## Registering an endpoint
+
+```bash
+curl -X POST http://localhost:8000/webhooks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "organization_id": "...",
+    "url": "https://your-service.example.com/hooks/setu",
+    "event_types": ["request.completed", "quota.exceeded"]
+  }'
+```
+
+Omit `event_types` to subscribe to all six. The response includes `secret` (`whsec_...`) - shown exactly once, used to verify delivery signatures. It's never returned by `GET`/list calls afterward; rotate it with `POST /webhooks/{id}/rotate-secret` if it leaks (the old secret is invalidated immediately, not retained).
+
+## Verifying signatures
+
+Each delivery includes an `X-Setu-Signature: sha256=<hex>` header - an HMAC-SHA256 of the raw request body, keyed with your endpoint's secret. Recompute it and compare with a constant-time comparison before trusting the payload:
+
+```python
+import hashlib
+import hmac
+
+def verify(payload_bytes: bytes, signature_header: str, secret: str) -> bool:
+    expected = "sha256=" + hmac.new(secret.encode(), payload_bytes, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature_header)
+```
+
+## Delivery and retries
+
+Delivery is fire-and-forget from the triggering request's perspective - a slow or broken receiver never adds latency to the API call that caused the event. Failed deliveries retry with exponential backoff, up to 4 attempts total. Every attempt sequence (not each individual HTTP call) is recorded as one `WebhookDelivery` row, inspectable via:
+
+```bash
+curl http://localhost:8000/webhooks/{id}/deliveries
+```
+
+which includes the response status code, truncated response body, and error message for troubleshooting a receiver that isn't getting events.

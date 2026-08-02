@@ -1,4 +1,5 @@
 from unittest.mock import MagicMock, patch
+
 import httpx
 import pytest
 
@@ -15,12 +16,14 @@ async def test_openai_provider_with_api_key_and_mocked_httpx():
     mock_resp = MagicMock()
     mock_resp.status_code = 200
     mock_resp.raise_for_status = MagicMock()
-    mock_resp.json = MagicMock(return_value={
-        "id": "chatcmpl-123",
-        "choices": [{"message": {"role": "assistant", "content": "Mock Response"}}],
-        "data": [{"id": "gpt-4o"}, {"id": "text-embedding-3-small"}],
-        "text": "Transcribed text sample",
-    })
+    mock_resp.json = MagicMock(
+        return_value={
+            "id": "chatcmpl-123",
+            "choices": [{"message": {"role": "assistant", "content": "Mock Response"}}],
+            "data": [{"id": "gpt-4o"}, {"id": "text-embedding-3-small"}],
+            "text": "Transcribed text sample",
+        }
+    )
 
     with patch("httpx.AsyncClient.post", return_value=mock_resp), patch("httpx.AsyncClient.get", return_value=mock_resp):
         chat_res = await provider.chat(ChatRequest(model="gpt-4o", messages=[{"role": "user", "content": "hi"}]))
@@ -61,12 +64,14 @@ async def test_ollama_provider_full_mocked_calls():
     mock_resp = MagicMock()
     mock_resp.status_code = 200
     mock_resp.raise_for_status = MagicMock()
-    mock_resp.json = MagicMock(return_value={
-        "message": {"role": "assistant", "content": "Ollama Mock Output"},
-        "models": [{"name": "llama3.2:latest"}, {"name": "mistral:latest"}],
-        "embedding": [0.1, 0.2, 0.3],
-        "version": "0.3.0",
-    })
+    mock_resp.json = MagicMock(
+        return_value={
+            "message": {"role": "assistant", "content": "Ollama Mock Output"},
+            "models": [{"name": "llama3.2:latest"}, {"name": "mistral:latest"}],
+            "embedding": [0.1, 0.2, 0.3],
+            "version": "0.3.0",
+        }
+    )
 
     with patch("httpx.AsyncClient.post", return_value=mock_resp), patch("httpx.AsyncClient.get", return_value=mock_resp):
         chat_res = await provider.chat(ChatRequest(model="llama3.2", messages=[{"role": "user", "content": "hi"}]))
@@ -89,8 +94,9 @@ async def test_ollama_provider_connection_unavailable_falls_back_to_mock():
     that doesn't happen to have Ollama running."""
     provider = OllamaProviderPlugin(base_url="http://localhost:11434")
 
-    with patch("httpx.AsyncClient.post", side_effect=httpx.ConnectError("Connection refused")), patch(
-        "httpx.AsyncClient.get", side_effect=httpx.ConnectError("Connection refused")
+    with (
+        patch("httpx.AsyncClient.post", side_effect=httpx.ConnectError("Connection refused")),
+        patch("httpx.AsyncClient.get", side_effect=httpx.ConnectError("Connection refused")),
     ):
         chat_res = await provider.chat(ChatRequest(model="llama3.2", messages=[{"role": "user", "content": "hi"}]))
         assert "ollama" in chat_res["choices"][0]["message"]["content"].lower()

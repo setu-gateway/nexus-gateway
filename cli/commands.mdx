@@ -3,17 +3,74 @@ title: "CLI Commands"
 description: "Reference for Setu Gateway CLI command-line utility."
 ---
 
-# Command Reference
+Every command accepts `--url` (default `http://localhost:8000`) to point at a non-default gateway. This is the complete command set - `setu <command> --help` shows the same reference from argparse directly.
 
-Available commands for managing your Setu Gateway instance:
+## `setu doctor`
 
-- `setu start`: Start the local gateway instance.
-- `setu status`: Check gateway health and connected providers.
-- `setu keys list`: List active API keys.
-- `setu keys create`: Provision a new API key.
-- `setu logs`: Stream request and system logs.
-- `setu benchmark`: Compare provider latency, throughput, streaming time-to-first-chunk, and error rate against a running gateway (Epic 4.10). Flags: `--url`, `--providers`, `--requests`, `--concurrency`, `--stream`, `--prompt`.
+Diagnoses your local setup: `.env` presence, settings load correctly, provider config is valid, and (if reachable) the gateway's own `/health`. Doesn't require a running gateway - local-only checks still run and report clearly if the gateway can't be reached.
+
+```bash
+setu doctor
+```
+
+## `setu config validate`
+
+Just the local checks from `doctor` (`.env`/settings/provider config) - no gateway reachability check.
+
+```bash
+setu config validate
+```
+
+## `setu health`
+
+Gateway health only (database, Redis) - a thin wrapper around `/health`.
+
+```bash
+setu health
+```
+
+## `setu providers`
+
+Lists configured providers with live health/trust metrics from the running gateway (success rate, average latency, current status).
+
+```bash
+setu providers
+```
+
+## `setu benchmark`
+
+Compares latency, throughput, streaming time-to-first-chunk, and error rate across providers.
 
 ```bash
 setu benchmark --providers openai,gemini,groq --requests 20 --concurrency 5
+```
+
+| Flag | Default | Notes |
+|---|---|---|
+| `--providers` | required | Comma-separated provider names |
+| `--requests` | `10` | Requests per provider |
+| `--concurrency` | `3` | Max concurrent requests per provider |
+| `--stream` | off | Benchmark streaming responses, adds time-to-first-chunk |
+| `--prompt` | a default summarization prompt | Override the benchmark prompt |
+
+See [PERFORMANCE.md](https://github.com/setu-gateway/nexus-gateway/blob/main/PERFORMANCE.md) for a full gateway-level (not just per-provider) load test using this same engine.
+
+## `setu replay`
+
+Sends one prompt to several providers at once and shows their responses side by side - useful for comparing model quality/behavior, not just latency.
+
+```bash
+setu replay --model gpt-4o --prompt "Explain routing in one sentence."
+setu replay --providers openai,gemini,ollama --prompt "..."
+```
+
+`--providers` (explicit list) overrides `--model` (resolve candidates from the routing catalog) if both are given.
+
+## `setu cache clear`
+
+Invalidates cached responses.
+
+```bash
+setu cache clear
+setu cache clear --project-id <project-id>   # only that project's entries
 ```

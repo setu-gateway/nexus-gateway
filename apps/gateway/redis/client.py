@@ -1,5 +1,5 @@
 import os
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import redis.asyncio as aioredis
 from redis.asyncio.connection import ConnectionPool
@@ -13,7 +13,7 @@ redis_pool: ConnectionPool = ConnectionPool.from_url(
     decode_responses=True,
 )
 
-_redis_client_instance: Optional[aioredis.Redis] = None
+_redis_client_instance: aioredis.Redis | None = None
 
 
 def get_redis_client() -> aioredis.Redis:
@@ -45,14 +45,14 @@ async def check_redis_connection() -> bool:
 class RedisStreamClient:
     """Client for publishing and consuming Redis Streams events."""
 
-    def __init__(self, client: Optional[aioredis.Redis] = None):
+    def __init__(self, client: aioredis.Redis | None = None):
         self.client = client or get_redis_client()
 
     async def publish_event(
         self,
         stream_name: str,
-        data: Dict[str, Any],
-        max_len: Optional[int] = 10000,
+        data: dict[str, Any],
+        max_len: int | None = 10000,
     ) -> str:
         """Publish an event payload to a Redis Stream (XADD)."""
         string_data = {str(k): str(v) for k, v in data.items()}
@@ -69,7 +69,7 @@ class RedisStreamClient:
         count: int = 10,
         block_ms: int = 1000,
         last_id: str = "$",
-    ) -> List[Any]:
+    ) -> list[Any]:
         """Read pending stream events (XREAD)."""
         results = await self.client.xread(
             streams={stream_name: last_id},
@@ -106,7 +106,7 @@ class RedisStreamClient:
         consumer_name: str,
         count: int = 10,
         block_ms: int = 1000,
-    ) -> List[Any]:
+    ) -> list[Any]:
         """Read stream events for a specific consumer group (XREADGROUP)."""
         results = await self.client.xreadgroup(
             groupname=group_name,

@@ -1,18 +1,23 @@
 import os
-from typing import Any, Dict, Optional
-from pydantic import BaseModel, Field
+from typing import Any
+
 import yaml
+from pydantic import BaseModel, Field
+
+from packages.shared.logging.logger import get_logger
+
+logger = get_logger("providers_config")
 
 
 class ProviderSetting(BaseModel):
     enabled: bool = True
-    base_url: Optional[str] = None
-    api_key: Optional[str] = None
+    base_url: str | None = None
+    api_key: str | None = None
     timeout_seconds: float = 30.0
 
 
 class ProvidersConfig(BaseModel):
-    providers: Dict[str, ProviderSetting] = Field(
+    providers: dict[str, ProviderSetting] = Field(
         default_factory=lambda: {
             "openai": ProviderSetting(enabled=True),
             "ollama": ProviderSetting(enabled=True),
@@ -23,21 +28,21 @@ class ProvidersConfig(BaseModel):
     )
 
 
-def load_providers_config(yaml_path: Optional[str] = None) -> ProvidersConfig:
+def load_providers_config(yaml_path: str | None = None) -> ProvidersConfig:
     """Load provider settings from YAML overlay file and environment variables."""
-    config_dict: Dict[str, Any] = {}
+    config_dict: dict[str, Any] = {}
 
     path = yaml_path or os.getenv("PROVIDERS_CONFIG_PATH", "providers.yaml")
     if os.path.exists(path):
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 loaded = yaml.safe_load(f)
                 if loaded and "providers" in loaded:
                     config_dict = loaded["providers"]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Could not load providers config from '{path}', falling back to defaults: {e}")
 
-    providers_map: Dict[str, ProviderSetting] = {}
+    providers_map: dict[str, ProviderSetting] = {}
     known_providers = ["openai", "ollama", "anthropic", "gemini", "groq"]
 
     for name in known_providers:

@@ -28,6 +28,9 @@ build/
 .env.*
 !.env.example
 
+# Kubernetes secrets filled in from infrastructure/kubernetes/secret.example.yaml
+infrastructure/kubernetes/secret.yaml
+
 # Editor/IDE
 .idea/
 .vscode/

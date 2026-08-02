@@ -3,8 +3,48 @@ title: "Code Style & Standards"
 description: "Coding style guidelines and linting rules."
 ---
 
-# Code Style Guidelines
+## Python
 
-- **TypeScript / Node.js**: Format with Prettier, enforce ESLint rules, and write strict type definitions.
-- **Python**: Follow PEP 8 guidelines and format with Ruff / Black.
-- **Documentation**: Write clear, active-voice MDX documentation following standard Mintlify structures.
+Formatting, import sorting, and linting are all [Ruff](https://docs.astral.sh/ruff/) -
+there's no separate Black or isort step.
+
+```bash
+uv run ruff format .   # formatting
+uv run ruff check .    # lint (includes import order)
+```
+
+A few project-specific choices, documented inline in `pyproject.toml`:
+
+- Line length is 140, not Ruff's default 88 - matches the codebase's existing convention.
+- `B008` (function call in a default argument) is ignored globally - it's how FastAPI's
+  `Depends(...)` is meant to be used, not the mutable-default-argument bug the rule
+  exists to catch.
+- `B024`/`B027` are ignored specifically for `packages/plugin_sdk/src/plugin.py` -
+  `BasePlugin`'s hooks are deliberately no-op-by-default (a template-method pattern), not
+  an oversight.
+
+`mypy` runs in strict mode in CI but is currently **report-only** (`continue-on-error`),
+not a merge gate - the codebase has a pre-existing type-annotation backlog. New code
+should still be typed properly; just don't expect a red X to block your PR over it today.
+
+`bandit` (static security analysis) and `pip-audit` (dependency vulnerabilities) run
+unmasked in CI. If bandit flags a genuine false positive, suppress the specific check on
+the specific line (`# nosec BXXX`) with a one-line reason above it - never a blanket
+`# nosec` or a project-wide skip for the rule.
+
+## TypeScript
+
+- Format and lint through the same tooling the CI typecheck step uses:
+  `pnpm --filter <package> typecheck` (`tsc --noEmit`) for the dashboard, the SDK, and
+  the examples.
+- There's no ESLint configuration yet - `tsc --noEmit` is the only enforced TS gate.
+- The dashboard has no test suite yet; the SDK's tests run with Vitest
+  (`pnpm --filter @setu/sdk test`).
+
+## Documentation
+
+MDX pages under the content directories (`getting-started/`, `features/`, `providers/`,
+etc. - see `docs.json`) are validated with `mint validate` in CI. Before documenting any
+endpoint, field name, or behavior, check it against the actual code - several older pages
+in this repo drifted from the real implementation as it evolved, which is exactly the
+kind of thing review should catch early.

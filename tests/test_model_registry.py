@@ -1,5 +1,3 @@
-import pytest
-
 from apps.gateway.models import ModelDefinition, ModelRegistry
 
 

@@ -3,10 +3,30 @@ title: "Release Process"
 description: "Versioning policy and automated release workflows."
 ---
 
-# Release Process
+Setu Gateway follows [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`).
+The project is currently pre-1.0 (see
+[ROADMAP.md](https://github.com/setu-gateway/nexus-gateway/blob/main/ROADMAP.md) for
+what that means for compatibility).
 
-Setu Gateway follows Semantic Versioning (`MAJOR.MINOR.PATCH`).
+## What happens on a release tag
 
-1. Version tags are created on `main` branch.
-2. Automated GitHub Actions publish npm packages and Docker images.
-3. Changelogs are updated automatically via release notes.
+Pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml`, which:
+
+1. Verifies the tag matches the version declared in `pyproject.toml`,
+   `packages/sdk-python/pyproject.toml`, and `packages/sdk-typescript/package.json` -
+   the release fails fast if a maintainer forgot to bump one of them.
+2. Builds the gateway's Python package, the Python SDK, the TypeScript SDK, and both
+   Docker images (gateway and dashboard).
+3. Exports and validates the live OpenAPI schema.
+4. Creates a GitHub Release with auto-generated notes and every build artifact attached.
+
+Publishing to PyPI, npm, and GHCR is **off by default** - the pipeline builds and
+verifies everything but only pushes to those registries once a maintainer explicitly
+arms it. See [RELEASING.md](https://github.com/setu-gateway/nexus-gateway/blob/main/RELEASING.md)
+in the repository root for the full checklist and how to enable real publishing.
+
+## Changelog
+
+`CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com/). Add entries
+under `[Unreleased]` as part of your PR when the change is user-facing; a maintainer
+moves them under a version heading when cutting a release.

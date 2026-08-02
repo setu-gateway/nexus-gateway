@@ -6,33 +6,184 @@ on:
       - 'v*.*.*'
   workflow_dispatch:
 
+permissions:
+  contents: write
+  packages: write
+
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "20"
+  PNPM_VERSION: "9"
+
 jobs:
-  build-and-publish:
-    name: Publish Release Packages
+  verify-version:
+    name: Verify Tag Matches Declared Versions
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v4
+      # Every package's version is a static string in its own manifest (hatchling
+      # doesn't derive it from the git tag) - this catches the release being cut
+      # before a maintainer remembers to bump all three in lockstep.
+      - name: Compare tag to package versions
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          GATEWAY_VERSION=$(grep -m1 '^version = ' pyproject.toml | sed -E 's/version = "(.*)"/\1/')
+          SDK_PY_VERSION=$(grep -m1 '^version = ' packages/sdk-python/pyproject.toml | sed -E 's/version = "(.*)"/\1/')
+          SDK_TS_VERSION=$(node -p "require('./packages/sdk-typescript/package.json').version")
+
+          echo "Tag version:            $TAG_VERSION"
+          echo "setu-gateway version:    $GATEWAY_VERSION"
+          echo "setu-gateway-sdk version: $SDK_PY_VERSION"
+          echo "@setu/sdk version:       $SDK_TS_VERSION"
+
+          fail=0
+          [ "$TAG_VERSION" = "$GATEWAY_VERSION" ] || { echo "::error::pyproject.toml version ($GATEWAY_VERSION) does not match tag ($TAG_VERSION)"; fail=1; }
+          [ "$TAG_VERSION" = "$SDK_PY_VERSION" ] || { echo "::error::packages/sdk-python/pyproject.toml version ($SDK_PY_VERSION) does not match tag ($TAG_VERSION)"; fail=1; }
+          [ "$TAG_VERSION" = "$SDK_TS_VERSION" ] || { echo "::error::packages/sdk-typescript/package.json version ($SDK_TS_VERSION) does not match tag ($TAG_VERSION)"; fail=1; }
+          exit $fail
+
+  build-gateway-package:
+    name: Build Gateway Python Package
+    needs: verify-version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-python@v5
         with:
-          node-version: 20
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@v2
+      - run: uv build
+      - uses: actions/upload-artifact@v4
         with:
-          version: 8
-      - name: Setup Python
-        uses: actions/setup-python@v5
+          name: setu-gateway-dist
+          path: dist/
+
+  build-sdk-python:
+    name: Build & Publish Python SDK
+    needs: verify-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v2
-      - name: Build Packages
-        run: |
-          pnpm install --no-frozen-lockfile || true
-          pnpm build || true
-          uv build || true
-      - name: Create GitHub Release
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@v2
+      - working-directory: packages/sdk-python
+        run: uv build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: setu-gateway-sdk-dist
+          path: packages/sdk-python/dist/
+      # Disabled by default - see RELEASING.md. Flip the `enable-release-publish`
+      # repository variable and set a PYPI_API_TOKEN secret to arm this.
+      - name: Publish to PyPI
+        if: vars.ENABLE_RELEASE_PUBLISH == 'true'
+        working-directory: packages/sdk-python
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: uv publish
+
+  build-sdk-typescript:
+    name: Build & Publish TypeScript SDK
+    needs: verify-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: 'https://registry.npmjs.org'
+      - uses: pnpm/action-setup@v3
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @setu/sdk build
+      - name: Pack npm tarball
+        working-directory: packages/sdk-typescript
+        run: pnpm pack --pack-destination dist-pack
+      - uses: actions/upload-artifact@v4
+        with:
+          name: setu-sdk-npm-dist
+          path: packages/sdk-typescript/dist-pack/*.tgz
+      # Disabled by default - see RELEASING.md. Flip the `enable-release-publish`
+      # repository variable and set an NPM_TOKEN secret to arm this.
+      - name: Publish to npm
+        if: vars.ENABLE_RELEASE_PUBLISH == 'true'
+        working-directory: packages/sdk-typescript
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
+
+  build-docker:
+    name: Build & Publish Docker Images
+    needs: verify-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        if: vars.ENABLE_RELEASE_PUBLISH == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build & push gateway image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: infrastructure/docker/Dockerfile.gateway
+          push: ${{ vars.ENABLE_RELEASE_PUBLISH == 'true' }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/setu-gateway:${{ github.ref_name }}
+            ghcr.io/${{ github.repository_owner }}/setu-gateway:latest
+      - name: Build & push dashboard image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: infrastructure/docker/Dockerfile.dashboard
+          push: ${{ vars.ENABLE_RELEASE_PUBLISH == 'true' }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/setu-dashboard:${{ github.ref_name }}
+            ghcr.io/${{ github.repository_owner }}/setu-dashboard:latest
+
+  export-openapi:
+    name: Export OpenAPI Schema
+    needs: verify-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@v2
+      - run: uv sync
+      - run: uv run python infrastructure/scripts/export_openapi.py openapi.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openapi-schema
+          path: openapi.json
+
+  github-release:
+    name: Create GitHub Release
+    needs: [build-gateway-package, build-sdk-python, build-sdk-typescript, build-docker, export-openapi]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+      - name: Create Release
         uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
         with:
           generate_release_notes: true
+          body: |
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for the full history.
+
+            Docker images: `ghcr.io/${{ github.repository_owner }}/setu-gateway:${{ github.ref_name }}` and `ghcr.io/${{ github.repository_owner }}/setu-dashboard:${{ github.ref_name }}`
+          files: |
+            release-artifacts/setu-gateway-dist/*
+            release-artifacts/setu-gateway-sdk-dist/*
+            release-artifacts/setu-sdk-npm-dist/*
+            release-artifacts/openapi-schema/openapi.json

@@ -1,10 +1,13 @@
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
-from apps.gateway.providers.instance import health_monitor, model_registry, provider_registry
+from apps.gateway.audit import record_audit_event
+from apps.gateway.auth import DashboardUserContext, Permission, require_permission
+from apps.gateway.providers.instance import health_monitor, provider_registry
+from apps.gateway.utils import fire_and_forget
 from packages.plugin_sdk import ProviderHealthResponse
 from packages.shared.config.providers_config import load_providers_config
 
@@ -15,8 +18,8 @@ class ProviderDetailResponse(BaseModel):
     name: str
     provider_name: str
     enabled: bool
-    capabilities: Dict[str, bool]
-    models: List[str]
+    capabilities: dict[str, bool]
+    models: list[str]
 
 
 class ProviderMetricsResponse(BaseModel):
@@ -27,17 +30,17 @@ class ProviderMetricsResponse(BaseModel):
     provider_name: str
     status: str
     trust_score: float
-    latency_ms: Optional[float]
+    latency_ms: float | None
     success_rate: float
     error_rate: float
     total_requests: int
     total_errors: int
     is_rate_limited: bool
-    last_successful_request: Optional[datetime]
+    last_successful_request: datetime | None
 
 
-@router.get("", response_model=List[ProviderDetailResponse])
-async def list_providers() -> List[ProviderDetailResponse]:
+@router.get("", response_model=list[ProviderDetailResponse])
+async def list_providers() -> list[ProviderDetailResponse]:
     """List all registered providers, their enabled state, capabilities, and models."""
     providers_meta = await provider_registry.list_providers()
     return [
@@ -56,7 +59,6 @@ async def list_providers() -> List[ProviderDetailResponse]:
 async def get_provider_details(provider: str) -> ProviderDetailResponse:
     """Retrieve metadata and capability details for a specific provider."""
     key = provider.lower()
-    prov_instance = provider_registry.get_provider(key)
 
     # Check if provider exists (even if disabled)
     providers_meta = await provider_registry.list_providers()
@@ -77,8 +79,8 @@ async def get_provider_details(provider: str) -> ProviderDetailResponse:
     )
 
 
-@router.get("/metrics/all", response_model=List[ProviderMetricsResponse])
-async def list_provider_metrics() -> List[ProviderMetricsResponse]:
+@router.get("/metrics/all", response_model=list[ProviderMetricsResponse])
+async def list_provider_metrics() -> list[ProviderMetricsResponse]:
     """Tracked health/trust metrics (Epic 4.5) for every registered provider - what the
     router actually sees when ranking candidates."""
     providers_meta = await provider_registry.list_providers()
@@ -140,8 +142,10 @@ async def get_provider_health(provider: str) -> ProviderHealthResponse:
         return ProviderHealthResponse(status="offline", latency_ms=None)
 
 
-@router.post("/reload", response_model=Dict[str, Any])
-async def reload_providers() -> Dict[str, Any]:
+@router.post("/reload", response_model=dict[str, Any])
+async def reload_providers(
+    request: Request, user: DashboardUserContext = Depends(require_permission(Permission.MANAGE_PROVIDERS))
+) -> dict[str, Any]:
     """Reload provider configuration settings dynamically from environment and configuration overlays."""
     prov_config = load_providers_config()
 
@@ -155,6 +159,18 @@ async def reload_providers() -> Dict[str, Any]:
     await health_monitor.run_health_check_round()
 
     active_count = len([p for p in await provider_registry.list_providers() if p.enabled])
+
+    fire_and_forget(
+        record_audit_event(
+            actor=user.email,
+            action="provider.reload",
+            resource_type="provider",
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            details={"active_providers_count": active_count},
+        )
+    )
+
     return {
         "message": "Providers reloaded successfully",
         "active_providers_count": active_count,

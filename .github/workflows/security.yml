@@ -2,33 +2,43 @@ name: Security Audit
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
   schedule:
     - cron: '0 0 * * 0'
 
 jobs:
-  security-scan:
-    name: Code & Dependency Security Audit
+  python-security:
+    name: Python Dependency & Code Security
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 8
-      - name: Audit pnpm Dependencies
-        run: pnpm audit --audit-level high || true
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Audit Python Dependencies
-        run: |
-          pip install safety || true
-          safety check || true
+      - uses: astral-sh/setup-uv@v2
+      - run: uv sync
+      - name: pip-audit (dependency vulnerabilities)
+        run: uv run pip-audit
+      - name: bandit (static security analysis)
+        # -c is required: bandit does not auto-discover pyproject.toml the way
+        # ruff/mypy/pytest do, and without it this would also scan vendored
+        # virtualenvs and test dirs (pure noise - assert-in-tests, third-party code).
+        run: uv run bandit -c pyproject.toml -r apps packages plugins
+
+  js-security:
+    name: JavaScript Dependency Security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: pnpm/action-setup@v3
+        with:
+          version: "9"
+      - run: pnpm install --frozen-lockfile
+      # high+ only: a moderate react-router advisory is already tracked separately
+      # (v6->v7 is a deliberate, non-trivial migration, not a quick patch bump).
+      - run: pnpm audit --audit-level high

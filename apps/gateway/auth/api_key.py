@@ -1,11 +1,10 @@
 import hashlib
 import secrets
-from typing import Tuple
 
 
-def generate_api_key(prefix: str = "sk_setu_") -> Tuple[str, str]:
+def generate_api_key(prefix: str = "sk_setu_") -> tuple[str, str]:
     """Generate a secure API key and its SHA-256 hash.
-    
+
     Returns:
         Tuple[str, str]: (plaintext_key, hashed_key)
         - plaintext_key is shown ONLY ONCE to the user on creation.

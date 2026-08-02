@@ -1,7 +1,4 @@
 from enum import Enum
-from typing import Callable, Set, Union
-
-from fastapi import HTTPException, status
 
 
 class Role(str, Enum):
@@ -20,9 +17,16 @@ class Permission(str, Enum):
     INVITE_MEMBERS = "invite_members"
     MANAGE_BILLING = "manage_billing"
     MANAGE_SETTINGS = "manage_settings"
+    MANAGE_ROUTING = "manage_routing"
+    MANAGE_WEBHOOKS = "manage_webhooks"
+    MANAGE_PROVIDERS = "manage_providers"
+    MANAGE_PROMPT_TEMPLATES = "manage_prompt_templates"
+    RUN_EVALUATIONS = "run_evaluations"
+    MANAGE_MCP_SERVERS = "manage_mcp_servers"
+    VIEW_AUDIT_LOG = "view_audit_log"
 
 
-ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
+ROLE_PERMISSIONS: dict[Role, set[Permission]] = {
     Role.OWNER: {
         Permission.CREATE_PROJECT,
         Permission.DELETE_PROJECT,
@@ -30,6 +34,13 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.INVITE_MEMBERS,
         Permission.MANAGE_BILLING,
         Permission.MANAGE_SETTINGS,
+        Permission.MANAGE_ROUTING,
+        Permission.MANAGE_WEBHOOKS,
+        Permission.MANAGE_PROVIDERS,
+        Permission.MANAGE_PROMPT_TEMPLATES,
+        Permission.RUN_EVALUATIONS,
+        Permission.MANAGE_MCP_SERVERS,
+        Permission.VIEW_AUDIT_LOG,
     },
     Role.ADMIN: {
         Permission.CREATE_PROJECT,
@@ -37,10 +48,22 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.MANAGE_API_KEYS,
         Permission.INVITE_MEMBERS,
         Permission.MANAGE_SETTINGS,
+        Permission.MANAGE_ROUTING,
+        Permission.MANAGE_WEBHOOKS,
+        Permission.MANAGE_PROVIDERS,
+        Permission.MANAGE_PROMPT_TEMPLATES,
+        Permission.RUN_EVALUATIONS,
+        Permission.MANAGE_MCP_SERVERS,
+        Permission.VIEW_AUDIT_LOG,
     },
     Role.DEVELOPER: {
         Permission.CREATE_PROJECT,
         Permission.MANAGE_API_KEYS,
+        Permission.MANAGE_ROUTING,
+        Permission.MANAGE_WEBHOOKS,
+        Permission.MANAGE_PROMPT_TEMPLATES,
+        Permission.RUN_EVALUATIONS,
+        Permission.MANAGE_MCP_SERVERS,
     },
     Role.BILLING: {
         Permission.MANAGE_BILLING,
@@ -48,6 +71,7 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
     Role.SECURITY: {
         Permission.MANAGE_API_KEYS,
         Permission.MANAGE_SETTINGS,
+        Permission.VIEW_AUDIT_LOG,
     },
     Role.VIEWER: set(),
 }
@@ -56,7 +80,7 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
 # full-privilege tiers; Developer/Billing/Security are peer "specialized contributor"
 # roles with non-overlapping permission sets - RFC-0003 lists them but doesn't define a
 # strict order between them - so they rank equally, above read-only Viewer and below
-# Admin/Owner. Use require_permission() instead when the distinction between them matters.
+# Admin/Owner. Use has_permission() instead when the distinction between them matters.
 ROLE_RANK: dict[Role, int] = {
     Role.OWNER: 4,
     Role.ADMIN: 3,
@@ -67,7 +91,7 @@ ROLE_RANK: dict[Role, int] = {
 }
 
 
-def has_permission(role: Union[Role, str], permission: Union[Permission, str]) -> bool:
+def has_permission(role: Role | str, permission: Permission | str) -> bool:
     """Check if a given role possesses a specific permission."""
     try:
         r = Role(role) if isinstance(role, str) else role
@@ -77,32 +101,10 @@ def has_permission(role: Union[Role, str], permission: Union[Permission, str]) -
         return False
 
 
-def require_permission(required_permission: Permission) -> Callable:
-    """FastAPI Dependency for enforcing role permissions."""
-
-    async def permission_checker(current_user_role: str = "viewer") -> None:
-        if not has_permission(current_user_role, required_permission):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Permission denied: Requires '{required_permission.value}' permission",
-            )
-
-    return permission_checker
-
-
-def require_role(required_role: Role) -> Callable:
-    """FastAPI Dependency for enforcing minimum required role."""
-
-    async def role_checker(current_user_role: str = "viewer") -> None:
-        try:
-            current = Role(current_user_role)
-        except ValueError:
-            current = None
-
-        if current is None or ROLE_RANK[current] < ROLE_RANK[required_role]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Role permission denied: Requires at least '{required_role.value}' role",
-            )
-
-    return role_checker
+def has_role_at_least(role: Role | str, required_role: Role) -> bool:
+    """Check if a given role meets or exceeds required_role's seniority rank."""
+    try:
+        r = Role(role) if isinstance(role, str) else role
+        return ROLE_RANK[r] >= ROLE_RANK[required_role]
+    except (ValueError, KeyError):
+        return False

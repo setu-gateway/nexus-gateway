@@ -1,6 +1,6 @@
 from packages.shared.config.providers_config import (
-    ProviderSetting,
     ProvidersConfig,
+    ProviderSetting,
     load_providers_config,
 )
 from packages.shared.config.settings import AppSettings, load_settings

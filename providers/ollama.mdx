@@ -3,20 +3,35 @@ title: "Ollama Provider"
 description: "Configuring local self-hosted Ollama LLMs in Setu Gateway."
 ---
 
-# Ollama Provider Setup
-
-Connect self-hosted local models running on Ollama.
+The Ollama adapter (`plugins/providers/ollama/plugin.py`) makes real calls to a local (or remote) Ollama server - no API key involved, just a reachable host.
 
 ## Setup
-
-Set your Ollama host URL:
 
 ```bash
 OLLAMA_BASE_URL=http://localhost:11434
 ```
 
-## Supported Models
+Enabled by default. If running the gateway via Docker Compose and Ollama on your host machine, `http://host.docker.internal:11434` is usually the right value, not `localhost` (which would resolve inside the container).
 
-- `llama3.2`
-- `mistral`
-- `qwen2.5`
+## Models
+
+Unlike the other providers, Ollama's model list isn't fixed to the catalog - `GET /v1/models` and the provider's own `models()` dynamically query the local Ollama server's `/api/tags` for whatever you've actually pulled (`ollama pull llama3.2`, etc.). The catalog has two named entries as fallback-chain equivalents for cross-provider routing:
+
+| Model ID | Tier | Upstream |
+|---|---|---|
+| `llama3` | fast | `llama3.2` |
+| `mistral` | fast | `mistral` |
+
+Any other locally-pulled model name (e.g. `qwen2.5`, `phi3`) also works when requested directly - it just doesn't participate in cross-provider routing equivalence the way the two catalog entries do.
+
+## Streaming
+
+Fully supported, incrementally - Ollama's own streaming format is translated chunk-by-chunk into OpenAI-compatible SSE.
+
+## Connection-failure fallback
+
+If the Ollama server is unreachable (connection refused/timeout - not an application-level error like "model not found"), `chat()`/`embeddings()` return a mock response with a warning logged, rather than failing the request outright. An error *from* a reachable server (bad request, model not found, persistent 5xx) propagates normally so routing/health tracking see the real failure.
+
+## Not implemented
+
+Image generation and audio transcription return `{"error": "..."}` - Ollama doesn't support either.

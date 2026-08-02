@@ -1,0 +1,32 @@
+---
+title: "Groq Provider"
+description: "Configuring Groq (LPU inference) models in Setu Gateway"
+---
+
+The Groq adapter (`plugins/providers/groq/plugin.py`) makes real calls to Groq's API. Groq's chat completions endpoint is wire-compatible with OpenAI's, so the adapter is close to a direct passthrough - no request/response translation needed, unlike Anthropic or Gemini.
+
+## Setup
+
+```bash
+GROQ_API_KEY=gsk_...
+```
+
+Enabled by default.
+
+## Catalog models
+
+| Model ID | Tier | Notes |
+|---|---|---|
+| `groq-llama-3.3` | fast | Maps to `llama-3.3-70b-versatile` upstream |
+
+## Streaming
+
+Fully supported, incrementally - Groq's SSE stream is relayed chunk-by-chunk as it arrives, the same as the OpenAI adapter, since the wire format matches.
+
+## Mock fallback with no key
+
+Without `GROQ_API_KEY` set, `chat()` (streaming and non-streaming) returns a deterministic mock response instead of failing.
+
+## Not implemented
+
+`embeddings()`/`image()` return `{"error": "..."}` - Groq's API doesn't support either. `audio()` returns placeholder text; Groq does host a real Whisper transcription endpoint, but it isn't wired up, and no route in the gateway currently reaches it (`/v1/audio` isn't registered - see [OpenAI](/providers/openai#not-implemented)).

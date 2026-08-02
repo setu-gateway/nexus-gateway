@@ -3,20 +3,37 @@ title: "Anthropic Provider"
 description: "Configuring Anthropic Claude models in Setu Gateway."
 ---
 
-# Anthropic Provider Setup
-
-Route requests to Anthropic Claude models via OpenAI-compatible endpoints or native Claude format.
+The Anthropic adapter (`plugins/providers/anthropic/plugin.py`) makes real calls to the Messages API and translates between OpenAI's request/response shape and Anthropic's - your requests to Setu stay OpenAI-shaped either way.
 
 ## Setup
-
-Set your Anthropic API key:
 
 ```bash
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-## Supported Models
+**Anthropic is disabled by default** (`packages/shared/config/providers_config.py`), unlike the other providers - set `PROVIDER_ANTHROPIC_ENABLED=true` in addition to the API key, or it won't be selected by [routing](/features/routing) even with a valid key configured.
 
-- `claude-3-5-sonnet-20241022`
-- `claude-3-5-haiku-20241022`
-- `claude-3-opus-20240229`
+## Catalog models
+
+| Model ID | Tier | Notes |
+|---|---|---|
+| `claude-3-5-sonnet` | flagship | Vision-capable |
+| `claude-3-5-haiku` | fast | |
+
+Request these unified IDs, not the dated upstream ones (`claude-3-5-sonnet-20241022`) - the gateway maps unified → upstream model IDs internally.
+
+## Translation notes
+
+A `system`-role message in your `messages` array is extracted and sent as Anthropic's separate top-level `system` field, not forwarded as a message (Anthropic's API rejects a `system` role in `messages`). Anthropic requires `max_tokens` with no default - the gateway sends `4096` if you didn't specify one.
+
+## Streaming
+
+Non-streaming requests translate Anthropic's response fully (content blocks joined into text, `stop_reason` mapped to OpenAI's `finish_reason` values, token usage converted). Streaming requests currently make the same real, non-streaming call and deliver the full answer as a single SSE chunk rather than incrementally - Anthropic's native stream uses a different event-based SSE format that isn't translated chunk-by-chunk yet. You get a real response either way; streamed requests just don't get incremental delivery for this provider yet.
+
+## Mock fallback with no key
+
+Without `ANTHROPIC_API_KEY` set, `chat()` returns a deterministic mock response (`"Claude response for model '...'"`) instead of failing.
+
+## Not implemented
+
+Anthropic has no embeddings, image generation, or audio transcription API - `embeddings()`/`image()`/`audio()` return `{"error": "..."}` regardless of whether a key is configured. This isn't a gap in the adapter; there's genuinely nothing to call.

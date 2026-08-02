@@ -19,11 +19,31 @@
         ]
       },
       {
-        "group": "Configuration",
+        "group": "Architecture",
         "pages": [
-          "configuration/environment",
-          "configuration/routing",
-          "configuration/authentication"
+          "architecture/overview",
+          "architecture/request-flow",
+          "architecture/caching",
+          "architecture/analytics"
+        ]
+      },
+      {
+        "group": "Deployment",
+        "pages": [
+          "deployment/docker",
+          "deployment/kubernetes",
+          "deployment/configuration"
+        ]
+      },
+      {
+        "group": "Core Features",
+        "pages": [
+          "features/routing",
+          "features/caching",
+          "features/time-machine",
+          "features/webhooks",
+          "features/rate-limiting",
+          "features/analytics"
         ]
       },
       {
@@ -31,25 +51,16 @@
         "pages": [
           "providers/openai",
           "providers/anthropic",
-          "providers/google",
+          "providers/gemini",
           "providers/ollama",
-          "providers/openrouter"
+          "providers/groq"
         ]
       },
       {
         "group": "Plugins",
         "pages": [
           "plugins/overview",
-          "plugins/creating-plugins",
-          "plugins/lifecycle"
-        ]
-      },
-      {
-        "group": "SDK",
-        "pages": [
-          "sdk/javascript",
-          "sdk/python",
-          "sdk/go"
+          "plugins/creating-plugins"
         ]
       },
       {
@@ -60,22 +71,26 @@
         ]
       },
       {
-        "group": "API",
+        "group": "SDKs",
+        "pages": [
+          "sdk/python",
+          "sdk/typescript"
+        ]
+      },
+      {
+        "group": "API Reference",
         "pages": [
           "api/authentication",
           "api/chat",
           "api/embeddings",
-          "api/images",
           "api/models"
         ]
       },
       {
-        "group": "Architecture",
+        "group": "Support",
         "pages": [
-          "architecture/overview",
-          "architecture/request-flow",
-          "architecture/caching",
-          "architecture/analytics"
+          "support/troubleshooting",
+          "support/faq"
         ]
       },
       {

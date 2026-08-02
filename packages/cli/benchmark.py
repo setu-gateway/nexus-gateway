@@ -1,8 +1,7 @@
-from dataclasses import dataclass, field
-from typing import List, Optional
 import asyncio
 import statistics
 import time
+from dataclasses import dataclass, field
 
 import httpx
 
@@ -23,15 +22,15 @@ DEFAULT_MODEL_BY_PROVIDER = {
 class RequestOutcome:
     success: bool
     latency_ms: float
-    time_to_first_chunk_ms: Optional[float] = None
-    error: Optional[str] = None
+    time_to_first_chunk_ms: float | None = None
+    error: str | None = None
 
 
 @dataclass
 class ProviderBenchmarkResult:
     provider: str
     model: str
-    outcomes: List[RequestOutcome] = field(default_factory=list)
+    outcomes: list[RequestOutcome] = field(default_factory=list)
     throughput_rps: float = 0.0
 
     @property
@@ -45,7 +44,7 @@ class ProviderBenchmarkResult:
         return round((1 - self.success_count / len(self.outcomes)) * 100, 2)
 
     @property
-    def _latencies(self) -> List[float]:
+    def _latencies(self) -> list[float]:
         return sorted(o.latency_ms for o in self.outcomes if o.success)
 
     @property
@@ -61,19 +60,17 @@ class ProviderBenchmarkResult:
         return lat[idx]
 
     @property
-    def avg_time_to_first_chunk_ms(self) -> Optional[float]:
+    def avg_time_to_first_chunk_ms(self) -> float | None:
         values = [o.time_to_first_chunk_ms for o in self.outcomes if o.success and o.time_to_first_chunk_ms is not None]
         return round(statistics.mean(values), 2) if values else None
 
 
-async def _run_single_request(
-    client: httpx.AsyncClient, base_url: str, model: str, prompt: str, stream: bool
-) -> RequestOutcome:
+async def _run_single_request(client: httpx.AsyncClient, base_url: str, model: str, prompt: str, stream: bool) -> RequestOutcome:
     payload = {"model": model, "messages": [{"role": "user", "content": prompt}], "stream": stream}
     start = time.perf_counter()
     try:
         if stream:
-            first_chunk_at: Optional[float] = None
+            first_chunk_at: float | None = None
             async with client.stream("POST", f"{base_url}/v1/chat/completions", json=payload, timeout=30.0) as resp:
                 resp.raise_for_status()
                 async for chunk in resp.aiter_bytes():
@@ -123,12 +120,12 @@ async def benchmark_provider(
 
 async def run_benchmark(
     base_url: str,
-    providers: List[str],
+    providers: list[str],
     requests: int = 10,
     concurrency: int = 3,
     stream: bool = False,
     prompt: str = "Summarize what an AI gateway does in one sentence.",
-) -> List[ProviderBenchmarkResult]:
+) -> list[ProviderBenchmarkResult]:
     results = []
     for provider in providers:
         model = DEFAULT_MODEL_BY_PROVIDER.get(provider, provider)

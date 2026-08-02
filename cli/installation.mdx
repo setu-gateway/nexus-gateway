@@ -3,16 +3,17 @@ title: "CLI Installation"
 description: "How to install the Setu Gateway CLI tool."
 ---
 
-# CLI Installation
-
-Install the Setu Gateway CLI globally via npm or homebrew:
+The `setu` CLI is part of this Python monorepo (`packages/cli`), not a separate package - install the project and the `setu` command comes with it (`pyproject.toml`'s `[project.scripts]` registers `setu = "packages.cli.main:main"`).
 
 ```bash
-npm install -g @setu/cli
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e .
 ```
 
-Verify installation:
+Verify it's on your `PATH`:
 
 ```bash
-setu --version
+setu doctor
 ```
+
+`doctor` checks your local `.env`/settings and, if a gateway is reachable, its health too - see [CLI Commands](/cli/commands). Most commands accept `--url` (default `http://localhost:8000`) to point at a non-default gateway.

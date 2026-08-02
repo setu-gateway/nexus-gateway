@@ -1,0 +1,49 @@
+---
+title: "Routing"
+description: "How Setu picks a provider and model, and fails over when one is unhealthy"
+---
+
+Every request to `/v1/chat/completions` goes through `RoutingEngine.route()` (`apps/gateway/routing/engine.py`), which returns a **primary candidate** plus a ranked **fallback chain** - the gateway tries candidates in that order and stops at the first success.
+
+## Building the candidate pool
+
+For the requested model, the router builds candidates from:
+
+1. The model's **primary provider** (its entry in the model catalog, `apps/gateway/models/catalog.py`) - if that provider is enabled.
+2. Same-**tier** equivalents from other enabled providers (`flagship`, `fast`, or `embedding` - see the catalog for which models are in which tier), so there's a real fallback to try if the primary is down. A vision request only considers vision-capable equivalents.
+
+Each candidate carries a trust score and observed latency from the [health monitor](#health-and-trust), plus an estimated cost from the catalog's per-1K-token pricing.
+
+## Policies
+
+Set the default via `ROUTING_DEFAULT_POLICY` (see [Configuration](/deployment/configuration)), or override per-request with the `X-Setu-Routing-Policy` header:
+
+| Policy | Ranks candidates by |
+|---|---|
+| `highest_availability` (default) | Trust score, then latency |
+| `lowest_latency` | Observed latency, primary as tiebreaker |
+| `lowest_cost` | Estimated cost, primary as tiebreaker |
+| `user_preference` | A specific provider first, ranked normally after |
+| `round_robin` | Rotates the primary pick across calls |
+| `weighted` | Random pick weighted by `routing.yaml`'s configured weights |
+| `capability_based` | Filters to candidates supporting the request's detected capability (currently: vision) |
+
+## Organization routing rules
+
+An organization can register rules (`POST /routing-rules`) that are evaluated *before* the policy ranking - a rule is an explicit override ("always reject this", "always prefer Ollama when available"), not one more ranking signal. Each rule has a condition expression (e.g. `latency > 500ms`, `estimated_cost > 0.01`, `provider_status == unavailable`) and an action: `reject` (the request fails with 403) or `fallback`/`use` a named provider. The condition parser is a small fixed grammar, deliberately not `eval()`-based, since the expression comes from API input.
+
+## Failover
+
+The gateway tries each candidate in the fallback chain in order, calling the real provider adapter each time. A candidate that raises an exception is recorded as an unhealthy attempt and the next candidate is tried - **except for streaming**: once the first SSE chunk has reached the client, the response is committed and a later failure surfaces as a stream error, not a silent retry against a different provider (which would duplicate or corrupt what the client already received). All candidates failing returns `503`.
+
+## Health and trust
+
+`apps/gateway/providers/health_monitor.py` tracks a rolling success rate and average latency per provider from real request outcomes, independent of the routing decision that led to them. A provider with a low trust score or a recent string of failures ranks lower (or is excluded as unhealthy) in future routing decisions, without any manual intervention.
+
+## Debugging a routing decision
+
+Send `X-Setu-Debug: true` and the response includes an `X-Setu-Routing-Debug` header with the full `RoutingDecision` JSON - selected provider, fallback chain, every candidate considered, and the human-readable reason the top candidate won.
+
+## Scoped keys narrow the fallback chain
+
+If the calling API key has `allowed_providers`/`allowed_models` restrictions ([Scoped API Keys](/api/authentication)), the fallback chain is filtered to only candidates within that scope *before* any attempt is made - a restricted key never gets silently routed to a provider or model outside its allowlist, even as a fallback.

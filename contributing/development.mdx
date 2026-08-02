@@ -3,23 +3,93 @@ title: "Development Setup"
 description: "Setting up your local environment for core contribution."
 ---
 
-# Local Development Setup
+Setu Gateway has two toolchains: Python (the gateway service, CLI, and Python SDK) and
+Node/pnpm (the dashboard and TypeScript SDK). Most contributions only touch one, but a
+full local setup covers both so the whole test suite can run.
 
-1. Fork and clone the repository:
+## 1. Clone and start Postgres/Redis
 
 ```bash
 git clone https://github.com/setu-gateway/nexus-gateway.git
 cd nexus-gateway
+docker compose up -d postgres redis
 ```
 
-2. Install workspace dependencies:
+This starts just the database and cache - not the gateway itself, so you can run it
+from source with your own edits picked up directly.
+
+Prefer to keep everything in containers instead of setting up a local Python
+environment? `docker compose up -d gateway` also works: `docker-compose.override.yml`
+bind-mounts `apps/gateway`, `packages`, and `plugins` into the container and enables
+uvicorn's `--reload`, so edits are picked up the same way as running from source below
+- just slower to start and to pick up a change than a local process. It's a dev-only
+override; the production image (`infrastructure/docker/Dockerfile.gateway`) still bakes
+in a fixed snapshot with no reload, which is what you want for a deployed container.
+
+## 2. Python setup
+
+Requires Python 3.10+ and [uv](https://docs.astral.sh/uv/).
+
+```bash
+uv sync
+cp .env.example .env
+uv run alembic upgrade head
+```
+
+`alembic upgrade head` applies the schema to the Postgres container from step 1 -
+without it the gateway will fail on its first database query.
+
+Run the gateway:
+
+```bash
+uv run uvicorn apps.gateway.main:app --reload
+```
+
+It's now serving on `http://localhost:8000`, OpenAI-compatible endpoints under `/v1`,
+and an interactive Swagger UI at `/docs`. Without any provider API keys set in `.env`,
+every provider plugin falls back to a deterministic mock response, so you can exercise
+the full request path with zero external accounts.
+
+## 3. Node/pnpm setup
+
+Requires Node 20+ and pnpm 9.
 
 ```bash
 pnpm install
+pnpm --filter @setu/dashboard dev
 ```
 
-3. Run unit and integration tests:
+The dashboard dev server proxies `/api/*` to `http://localhost:8000` (see
+`apps/dashboard/vite.config.ts`), so run the gateway from step 2 alongside it.
+
+## 4. Running tests
 
 ```bash
-pnpm test
+# Python: gateway, CLI, plugins (uses SQLite + fakeredis, no containers needed)
+uv run pytest
+
+# TypeScript SDK
+pnpm --filter @setu/sdk test
+
+# Type checking (dashboard, both SDKs)
+pnpm --filter @setu/dashboard typecheck
+pnpm --filter @setu/sdk typecheck
+pnpm --filter @setu/examples typecheck
 ```
+
+The Python test suite runs against SQLite and fakeredis, not the Postgres/Redis
+containers - it doesn't need step 1 at all. It's the fast, default path for most
+changes; only start the containers if you're testing something Postgres/Redis-specific
+(a real migration, actual rate-limiter TTL behavior, and so on).
+
+## 5. Before opening a PR
+
+```bash
+uv run ruff format .
+uv run ruff check .
+uv run pytest
+```
+
+CI (`.github/workflows/ci.yml`) runs the same checks, plus TypeScript typechecks, a
+Docker build, and an OpenAPI schema validation - see [Code Style](/contributing/code-style)
+for what's enforced and what's report-only.

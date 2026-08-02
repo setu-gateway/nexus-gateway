@@ -1,7 +1,30 @@
+import { getAccessToken, logout, refreshAccessToken } from "./auth";
+
 const BASE_URL = import.meta.env.VITE_GATEWAY_URL ?? "/api";
 
-async function request<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`);
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const doFetch = (token: string | null) =>
+    fetch(`${BASE_URL}${path}`, {
+      ...init,
+      headers: {
+        ...(init.headers ?? {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+
+  let res = await doFetch(getAccessToken());
+
+  // A 401 might just mean the short-lived access token expired mid-session - try
+  // once to mint a fresh one from the refresh token before giving up.
+  if (res.status === 401) {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      res = await doFetch(newToken);
+    } else {
+      logout();
+    }
+  }
+
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`${res.status} ${res.statusText}: ${body}`);

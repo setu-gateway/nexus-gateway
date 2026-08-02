@@ -1,0 +1,62 @@
+---
+title: "Kubernetes"
+description: "Running Setu Gateway on Kubernetes"
+---
+
+`infrastructure/kubernetes/` has plain manifests for the gateway and dashboard - a Deployment + Service each, plus a ConfigMap and a Secret template. This isn't a templated Helm chart yet; treat it as a working starting point to adapt for your cluster, not a drop-in production chart.
+
+These manifests assume you already have PostgreSQL and Redis reachable from the cluster (a managed service, or your own database operator/Helm chart) - they don't stand up Postgres/Redis themselves. `docker-compose.yml`'s `postgres`/`redis` services are for local development only; replicating them as raw Kubernetes StatefulSets isn't something these manifests attempt.
+
+## Build and push images
+
+```bash
+docker build -f infrastructure/docker/Dockerfile.gateway -t your-registry/setu-gateway:latest .
+docker build -f infrastructure/docker/Dockerfile.dashboard -t your-registry/setu-dashboard:latest .
+docker push your-registry/setu-gateway:latest
+docker push your-registry/setu-dashboard:latest
+```
+
+Update the `image:` field in `gateway-deployment.yaml` and `dashboard-deployment.yaml` to match.
+
+## Configure secrets
+
+```bash
+cp infrastructure/kubernetes/secret.example.yaml infrastructure/kubernetes/secret.yaml
+```
+
+Fill in `DATABASE_URL`, `REDIS_URL`, a real `JWT_SECRET` (32+ characters - the gateway refuses to start in production with the default or a short one, see `packages/shared/config/settings.py`), and any provider API keys. `secret.yaml` is gitignored; don't commit it.
+
+## Apply
+
+```bash
+kubectl apply -f infrastructure/kubernetes/configmap.yaml
+kubectl apply -f infrastructure/kubernetes/secret.yaml
+kubectl apply -f infrastructure/kubernetes/gateway-deployment.yaml
+kubectl apply -f infrastructure/kubernetes/gateway-service.yaml
+kubectl apply -f infrastructure/kubernetes/dashboard-deployment.yaml
+kubectl apply -f infrastructure/kubernetes/dashboard-service.yaml
+```
+
+Run migrations against your database before (or right after) the first apply - the gateway image doesn't run them automatically:
+
+```bash
+DATABASE_URL="postgresql+asyncpg://..." alembic upgrade head
+```
+
+## Probes
+
+The gateway exposes three separate health endpoints, purpose-built for this:
+
+- `/live` - process is up. Used for the liveness probe.
+- `/ready` - checks actual DB and Redis connectivity, returns 503 if either is down. Used for the readiness probe, so a pod that can't reach its dependencies stops receiving traffic without being killed and restarted.
+- `/health` - the same dependency check as `/ready`, plus a `"degraded"` state when only one of the two is reachable; meant for humans/dashboards, not probes.
+
+`gateway-deployment.yaml` wires `/ready` and `/live` to the readiness and liveness probes respectively.
+
+## Connection pool sizing across replicas
+
+Each gateway pod holds its own DB connection pool (`DB_POOL_SIZE` + `DB_MAX_OVERFLOW`, set in `configmap.yaml`). Multiply by your replica count when checking against Postgres's own `max_connections` - two replicas at the manifest's defaults (20 + 30 = 50 each) is 100 total, which is Postgres's own out-of-the-box default. Lower the per-pod values or raise `max_connections` accordingly. See [PERFORMANCE.md](https://github.com/setu-gateway/nexus-gateway/blob/main/PERFORMANCE.md) for the load test that motivated these defaults.
+
+## Exposing the dashboard externally
+
+Neither Service is `LoadBalancer` or has an Ingress defined - both default to `ClusterIP`. Add an Ingress (or change `dashboard-service.yaml`'s `type`) pointing at `setu-dashboard` on port `3000` for your cluster's ingress controller; the exact shape depends on which one you run, so it's left out rather than guessed at.

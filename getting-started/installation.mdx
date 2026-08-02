@@ -3,34 +3,59 @@ title: "Installation"
 description: "How to install and run Setu Gateway locally or with Docker."
 ---
 
-# Installing Setu Gateway
+You can run Setu Gateway using Docker Compose (recommended for evaluating it or running locally) or directly from source (for contributing to the gateway itself).
 
-You can run Setu Gateway using Docker Compose or directly from source.
+## Option 1: Docker Compose
 
-## Option 1: Docker Compose (Recommended)
-
-Run the following command to start the entire Gateway stack:
+This starts the gateway, dashboard, PostgreSQL, and Redis together.
 
 ```bash
+git clone https://github.com/setu-gateway/nexus-gateway.git
+cd nexus-gateway
+cp .env.example .env
 docker compose up -d
 ```
 
-Verify that the Gateway is running on port `8000`:
+Edit `.env` first if you want a provider to make real upstream calls - set `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY`. Without a key configured, that provider's adapter returns a deterministic mock response instead of calling out to the real API, so the gateway is fully usable (and safe to load-test) with no keys at all.
+
+Verify the gateway is running:
 
 ```bash
 curl http://localhost:8000/health
 ```
 
-## Option 2: Run from Source
+```json
+{"status": "ok", "service": "gateway", "components": {"database": true, "redis": true}}
+```
 
-1. Clone the repository and install Node.js / Python dependencies:
+The dashboard is at `http://localhost:3000`.
+
+## Option 2: Run from source
+
+The gateway backend is a Python/FastAPI app; the dashboard is a separate Node/Vite app. They're started independently - there's no single command that runs both outside Docker.
+
+**Backend:**
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+cp .env.example .env  # point DATABASE_URL / REDIS_URL at your own Postgres/Redis
+alembic upgrade head
+uvicorn apps.gateway.main:app --reload --port 8000
+```
+
+**Dashboard** (in a separate terminal):
 
 ```bash
 pnpm install
+pnpm --filter @setu/dashboard dev
 ```
 
-2. Start the gateway dev server:
+The dashboard's dev server proxies `/api/*` to `GATEWAY_URL` (default `http://localhost:8000`) - see `apps/dashboard/vite.config.ts`.
 
-```bash
-pnpm dev
-```
+## Requirements
+
+- Docker Compose path: Docker and Docker Compose.
+- Source path: Python 3.10+, Node.js 18+, pnpm, and a running PostgreSQL + Redis (or point `DATABASE_URL`/`REDIS_URL` at existing instances).
+
+## Next: [Quickstart](/getting-started/quickstart)

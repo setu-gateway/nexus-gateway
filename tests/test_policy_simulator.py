@@ -1,8 +1,8 @@
 import random
-import uuid
 
-from fastapi.testclient import TestClient
 import pytest
+from conftest import register_and_login
+from fastapi.testclient import TestClient
 
 from apps.gateway.main import app
 from apps.gateway.models.catalog import ModelRegistry
@@ -95,7 +95,8 @@ def test_default_simulation_sample_falls_back_to_full_catalog():
 
 
 def test_simulate_endpoint_returns_distribution():
-    resp = client.post("/routing/simulate", json={"policy": "lowest_cost", "models": ["gpt-4o", "gpt-4o-mini"]})
+    _, headers = register_and_login(client)
+    resp = client.post("/routing/simulate", json={"policy": "lowest_cost", "models": ["gpt-4o", "gpt-4o-mini"]}, headers=headers)
     assert resp.status_code == 200
     data = resp.json()
     assert data["sample_size"] == 2
@@ -104,14 +105,19 @@ def test_simulate_endpoint_returns_distribution():
 
 
 def test_simulate_endpoint_falls_back_to_recent_request_history():
-    # Generate some real traffic so the endpoint has history to sample from.
+    _, headers = register_and_login(client)
+    # Generate some real traffic so the endpoint has history to sample from. This
+    # request is anonymous (no org), so it won't actually show up in *this* caller's
+    # own org-scoped history - the simulator's own fallback to the full model catalog
+    # when an org has no history yet is what keeps this assertion meaningful either way.
     client.post("/v1/chat/completions", json={"model": "gpt-4o", "messages": [{"role": "user", "content": "hi"}]})
 
-    resp = client.post("/routing/simulate", json={"policy": "highest_availability"})
+    resp = client.post("/routing/simulate", json={"policy": "highest_availability"}, headers=headers)
     assert resp.status_code == 200
     assert resp.json()["sample_size"] >= 1
 
 
 def test_simulate_endpoint_rejects_invalid_policy_name():
-    resp = client.post("/routing/simulate", json={"policy": "not_a_real_policy"})
+    _, headers = register_and_login(client)
+    resp = client.post("/routing/simulate", json={"policy": "not_a_real_policy"}, headers=headers)
     assert resp.status_code == 422

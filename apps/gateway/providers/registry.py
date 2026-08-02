@@ -1,4 +1,3 @@
-from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from packages.plugin_sdk import ProviderHealthResponse, ProviderPlugin
@@ -22,21 +21,21 @@ class ProviderMetadata(BaseModel):
     provider_name: str
     enabled: bool = True
     capabilities: ProviderCapabilities
-    models: List[str] = Field(default_factory=list)
+    models: list[str] = Field(default_factory=list)
 
 
 class ProviderRegistry:
     """Registry for managing and executing LLM Provider plugins."""
 
     def __init__(self):
-        self._providers: Dict[str, ProviderPlugin] = {}
-        self._enabled_status: Dict[str, bool] = {}
-        self._capabilities: Dict[str, ProviderCapabilities] = {}
+        self._providers: dict[str, ProviderPlugin] = {}
+        self._enabled_status: dict[str, bool] = {}
+        self._capabilities: dict[str, ProviderCapabilities] = {}
 
     def register_provider(
         self,
         provider: ProviderPlugin,
-        capabilities: Optional[ProviderCapabilities] = None,
+        capabilities: ProviderCapabilities | None = None,
         enabled: bool = True,
     ) -> None:
         """Register a provider plugin instance."""
@@ -79,27 +78,27 @@ class ProviderRegistry:
         """Check if provider is enabled."""
         return self._enabled_status.get(name.lower(), False)
 
-    def get_provider(self, name: str) -> Optional[ProviderPlugin]:
+    def get_provider(self, name: str) -> ProviderPlugin | None:
         """Get an active, enabled provider instance."""
         key = name.lower()
         if key in self._providers and self._enabled_status.get(key, False):
             return self._providers[key]
         return None
 
-    def get_capabilities(self, name: str) -> Optional[ProviderCapabilities]:
+    def get_capabilities(self, name: str) -> ProviderCapabilities | None:
         """Get capability flags for a provider."""
         return self._capabilities.get(name.lower())
 
-    async def list_providers(self) -> List[ProviderMetadata]:
+    async def list_providers(self) -> list[ProviderMetadata]:
         """List metadata for all registered providers."""
-        results: List[ProviderMetadata] = []
+        results: list[ProviderMetadata] = []
         for name, provider in self._providers.items():
             models_list = []
             try:
                 models_resp = await provider.models()
                 models_list = models_resp.models
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not list models for provider '{name}': {e}")
 
             results.append(
                 ProviderMetadata(
@@ -112,9 +111,9 @@ class ProviderRegistry:
             )
         return results
 
-    async def check_all_health(self) -> Dict[str, ProviderHealthResponse]:
+    async def check_all_health(self) -> dict[str, ProviderHealthResponse]:
         """Query health status across all enabled providers."""
-        health_results: Dict[str, ProviderHealthResponse] = {}
+        health_results: dict[str, ProviderHealthResponse] = {}
         for name, provider in self._providers.items():
             if not self._enabled_status.get(name, False):
                 health_results[name] = ProviderHealthResponse(status="offline", latency_ms=None)

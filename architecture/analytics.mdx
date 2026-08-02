@@ -1,17 +1,31 @@
 ---
-title: "Analytics & Telemetry"
-description: "Token usage, cost tracking, and latency observability."
+title: "Analytics & Observability"
+description: "Request logging, cost tracking, and usage summaries."
 ---
 
-# Observability & Analytics
+Every request is recorded to Postgres as a `RequestLog` row - there is no
+Prometheus/Grafana or OpenTelemetry metrics export; analytics are queried through the
+gateway's own API.
 
-Setu Gateway tracks latency per provider, prompt tokens, completion tokens, and dollar costs.
+## `GET /analytics/requests`
 
-## Metrics Export
+Returns individual request records: requested model, selected provider, routing
+policy, whether fallback was used, status, token counts, estimated cost, and latency.
+Filterable by project, provider, model, and status.
 
-Metrics are exposed via standard Prometheus format at `/metrics`:
+## `GET /analytics/summary`
 
-- `gateway_requests_total`
-- `gateway_token_usage_total`
-- `gateway_request_duration_seconds`
-- `gateway_cost_usd_total`
+Returns an aggregate over a set of requests:
+
+- `total_requests`, `successful_requests`, `failed_requests`, `error_rate`
+- `avg_latency_ms`, `total_estimated_cost`, `total_tokens`
+- `cache_hit_rate`, `fallback_rate`
+- `by_provider` - a breakdown per provider
+- `top_models` - a breakdown per model
+
+## Cost estimation
+
+`estimated_cost` is computed from the model catalog's per-token pricing
+(`apps/gateway/models/catalog.py`) applied to the provider's reported prompt/completion
+token counts - it's an estimate based on published pricing, not a value read back from
+the provider's own billing.

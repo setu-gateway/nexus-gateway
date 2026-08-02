@@ -1,8 +1,7 @@
-import uuid
+from conftest import register_and_login
 from fastapi.testclient import TestClient
-import pytest
 
-from apps.gateway.auth.api_key import generate_api_key, hash_api_key, mask_api_key, verify_api_key
+from apps.gateway.auth.api_key import generate_api_key, mask_api_key, verify_api_key
 from apps.gateway.main import app
 
 client = TestClient(app)
@@ -26,12 +25,15 @@ def test_api_key_generation_and_hashing():
 
 
 def test_api_key_crud_endpoints():
-    project_id = str(uuid.uuid4())
+    org_id, headers = register_and_login(client)
+    project = client.post("/projects", json={"name": "Key Test Project", "organization_id": org_id}, headers=headers).json()
+    project_id = project["id"]
 
     # 1. Create API Key
     create_resp = client.post(
         "/keys",
         json={"project_id": project_id, "name": "Production Key"},
+        headers=headers,
     )
     assert create_resp.status_code == 201
     data = create_resp.json()
@@ -41,10 +43,9 @@ def test_api_key_crud_endpoints():
     assert data["key"].startswith("sk_setu_")
     assert "..." in data["masked_key"]
     key_id = data["id"]
-    plaintext_key = data["key"]
 
     # 2. List API Keys (must mask keys, never return plaintext)
-    list_resp = client.get(f"/keys?project_id={project_id}")
+    list_resp = client.get(f"/keys?project_id={project_id}", headers=headers)
     assert list_resp.status_code == 200
     keys = list_resp.json()
     assert len(keys) >= 1
@@ -53,13 +54,13 @@ def test_api_key_crud_endpoints():
     assert "masked_key" in found_key
 
     # 3. Get Key Metadata
-    get_resp = client.get(f"/keys/{key_id}")
+    get_resp = client.get(f"/keys/{key_id}", headers=headers)
     assert get_resp.status_code == 200
     assert get_resp.json()["name"] == "Production Key"
 
     # 4. Revoke Key
-    del_resp = client.delete(f"/keys/{key_id}")
+    del_resp = client.delete(f"/keys/{key_id}", headers=headers)
     assert del_resp.status_code == 200
 
     # 5. Verify 404 after deletion
-    assert client.get(f"/keys/{key_id}").status_code == 404
+    assert client.get(f"/keys/{key_id}", headers=headers).status_code == 404

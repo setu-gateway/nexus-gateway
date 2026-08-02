@@ -1,0 +1,37 @@
+---
+title: "Google Gemini Provider"
+description: "Configuring Google Gemini models in Setu Gateway."
+---
+
+The Gemini adapter (`plugins/providers/gemini/plugin.py`) makes real calls to Google's `generateContent` API and translates between OpenAI's request/response shape and Gemini's.
+
+## Setup
+
+```bash
+GEMINI_API_KEY=AIzaSy...
+```
+
+Enabled by default.
+
+## Catalog models
+
+| Model ID | Tier | Notes |
+|---|---|---|
+| `gemini-1.5-pro` | flagship | Vision-capable |
+| `gemini-1.5-flash` | fast | Vision-capable |
+
+## Translation notes
+
+Gemini uses `user`/`model` roles rather than OpenAI's `user`/`assistant` - an `assistant`-role message in your request is translated to `model` automatically. A `system`-role message is extracted into Gemini's separate `systemInstruction` field rather than sent as part of the conversation, since Gemini's `contents` array doesn't accept a system role. The API key is sent as a `key` query parameter (Gemini's authentication scheme), not an `Authorization` header.
+
+## Streaming
+
+Non-streaming requests translate Gemini's `candidates`/`usageMetadata` response fully. Streaming requests currently make the same real, non-streaming call and deliver the full answer as a single SSE chunk rather than incrementally - Gemini's native `streamGenerateContent` format isn't translated chunk-by-chunk yet. You get a real response either way; streamed requests just don't get incremental delivery for this provider yet.
+
+## Mock fallback with no key
+
+Without `GEMINI_API_KEY` set, `chat()` returns a deterministic mock response (`"Gemini response for model '...'"`) instead of failing.
+
+## Not implemented
+
+`embeddings()`/`image()`/`audio()` return stub/placeholder data regardless of whether a key is configured - Gemini does have real APIs for these, but they're not wired up yet. None of the gateway's model catalog routes an embedding/image/audio request to Gemini currently, so this isn't reachable through normal `/v1/*` traffic either way.

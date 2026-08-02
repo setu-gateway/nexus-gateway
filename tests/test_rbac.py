@@ -1,18 +1,22 @@
-from fastapi import HTTPException
 import pytest
+from fastapi import HTTPException
 
-from apps.gateway.auth.rbac import (
-    Permission,
-    ROLE_PERMISSIONS,
-    Role,
-    has_permission,
-    require_permission,
-    require_role,
-)
+from apps.gateway.auth.dashboard_context import DashboardUserContext, require_permission, require_role
+from apps.gateway.auth.rbac import Permission, Role, has_permission, has_role_at_least
+
+
+def _user(role: str) -> DashboardUserContext:
+    return DashboardUserContext(
+        user_id="00000000-0000-0000-0000-000000000001",
+        email="test@example.com",
+        organization_id="00000000-0000-0000-0000-000000000002",
+        role=role,
+        is_verified=True,
+    )
 
 
 def test_rbac_roles_and_permissions_matrix():
-    # Owner should have all 6 permissions
+    # Owner should have all permissions
     assert has_permission(Role.OWNER, Permission.CREATE_PROJECT) is True
     assert has_permission(Role.OWNER, Permission.DELETE_PROJECT) is True
     assert has_permission(Role.OWNER, Permission.MANAGE_API_KEYS) is True
@@ -41,16 +45,20 @@ def test_rbac_roles_and_permissions_matrix():
     assert has_permission(Role.VIEWER, Permission.MANAGE_BILLING) is False
 
 
+def test_has_role_at_least_fails_closed_on_garbage_input():
+    assert has_role_at_least("not-a-real-role", Role.VIEWER) is False
+
+
 @pytest.mark.asyncio
 async def test_require_permission_dependency():
     checker = require_permission(Permission.MANAGE_BILLING)
 
     # Owner passes
-    await checker(current_user_role="owner")
+    await checker(user=_user("owner"))
 
     # Developer fails with 403
     with pytest.raises(HTTPException) as exc_info:
-        await checker(current_user_role="developer")
+        await checker(user=_user("developer"))
     assert exc_info.value.status_code == 403
     assert "Permission denied" in exc_info.value.detail
 
@@ -60,11 +68,11 @@ async def test_require_role_dependency():
     role_checker = require_role(Role.OWNER)
 
     # Owner passes
-    await role_checker(current_user_role="owner")
+    await role_checker(user=_user("owner"))
 
     # Admin fails
     with pytest.raises(HTTPException) as exc_info:
-        await role_checker(current_user_role="admin")
+        await role_checker(user=_user("admin"))
     assert exc_info.value.status_code == 403
 
 
@@ -72,18 +80,18 @@ async def test_require_role_dependency():
 async def test_require_role_is_a_minimum_not_an_exact_match():
     # A route gated to the "developer" minimum should also admit higher-ranked roles.
     developer_gate = require_role(Role.DEVELOPER)
-    await developer_gate(current_user_role="owner")
-    await developer_gate(current_user_role="admin")
-    await developer_gate(current_user_role="developer")
+    await developer_gate(user=_user("owner"))
+    await developer_gate(user=_user("admin"))
+    await developer_gate(user=_user("developer"))
 
     # Viewer is below the "developer" minimum and should still be rejected.
     with pytest.raises(HTTPException) as exc_info:
-        await developer_gate(current_user_role="viewer")
+        await developer_gate(user=_user("viewer"))
     assert exc_info.value.status_code == 403
 
     # Unknown/garbage role strings must fail closed, not raise a KeyError.
     with pytest.raises(HTTPException):
-        await developer_gate(current_user_role="not-a-real-role")
+        await developer_gate(user=_user("not-a-real-role"))
 
 
 def test_billing_and_security_roles_exist_per_rfc_0003():

@@ -1,9 +1,20 @@
-from typing import List
-
 from packages.cli.benchmark import ProviderBenchmarkResult
 
 
-def render_benchmark_report(results: List[ProviderBenchmarkResult], stream: bool) -> str:
+def render_table(headers: list[str], rows: list[list[str]]) -> str:
+    """Aligned plain-text table shared by every CLI subcommand that reports tabular
+    data - useful for pasting into documentation, a PR description, or a terminal."""
+    widths = [max(len(headers[i]), *(len(row[i]) for row in rows)) if rows else len(headers[i]) for i in range(len(headers))]
+
+    def _fmt_row(cells: list[str]) -> str:
+        return "  ".join(cell.ljust(widths[i]) for i, cell in enumerate(cells))
+
+    lines = [_fmt_row(headers), _fmt_row(["-" * w for w in widths])]
+    lines.extend(_fmt_row(row) for row in rows)
+    return "\n".join(lines)
+
+
+def render_benchmark_report(results: list[ProviderBenchmarkResult], stream: bool) -> str:
     """Render benchmark results as an aligned plain-text table - useful for pasting
     into documentation or a PR description, per Epic 4.10's stated purpose."""
     headers = ["Provider", "Model", "Avg", "p95", "Throughput", "Errors"]
@@ -25,13 +36,7 @@ def render_benchmark_report(results: List[ProviderBenchmarkResult], stream: bool
             row.insert(3, f"{ttfc:.0f}ms" if ttfc is not None else "—")
         rows.append(row)
 
-    widths = [max(len(headers[i]), *(len(row[i]) for row in rows)) if rows else len(headers[i]) for i in range(len(headers))]
-
-    def _fmt_row(cells: List[str]) -> str:
-        return "  ".join(cell.ljust(widths[i]) for i, cell in enumerate(cells))
-
-    lines = [_fmt_row(headers), _fmt_row(["-" * w for w in widths])]
-    lines.extend(_fmt_row(row) for row in rows)
+    lines = [render_table(headers, rows)]
 
     failing = [r for r in results if r.error_rate > 0]
     if failing:

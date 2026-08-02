@@ -1,5 +1,4 @@
 from collections import Counter
-from typing import Dict, List, Optional
 
 from pydantic import BaseModel
 
@@ -13,17 +12,17 @@ class SimulationOutcome(BaseModel):
 
     policy: str
     sample_size: int
-    provider_distribution: Dict[str, float]
+    provider_distribution: dict[str, float]
     fallback_rate: float
     avg_estimated_cost: float
     avg_latency_ms: float
-    sample_models: List[str]
+    sample_models: list[str]
 
 
 def simulate_policy(
     routing_engine: RoutingEngine,
     policy: RoutingPolicy,
-    models: List[str],
+    models: list[str],
     trials_per_model: int = 1,
 ) -> SimulationOutcome:
     """Run `policy` against a sample of requested models and report the resulting
@@ -88,7 +87,7 @@ def simulate_policy(
     )
 
 
-def default_simulation_sample(routing_engine: RoutingEngine, recent_models: Optional[List[str]] = None) -> List[str]:
+def default_simulation_sample(routing_engine: RoutingEngine, recent_models: list[str] | None = None) -> list[str]:
     """Pick a representative sample of models to simulate against: real recent traffic
     when available (from request_logs, passed in by the caller), otherwise one of every
     catalog model so at least every tier/provider combination is represented."""

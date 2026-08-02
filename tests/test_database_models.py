@@ -1,6 +1,5 @@
 import uuid
 from datetime import datetime, timezone
-import pytest
 
 from apps.gateway.db.models import APIKey, Organization, Project, User
 

@@ -1,0 +1,46 @@
+---
+title: "Rate Limiting"
+description: "Redis-backed rate limiting: per-key budgets and configurable rules"
+---
+
+Rate limits are checked before routing and before any provider is called, so a rejected request never reaches an upstream provider. Enforcement is Redis-backed (`apps/gateway/ratelimit/limiter.py`) and **fails open** - if Redis is unreachable, requests are allowed rather than blocked, so a Redis outage degrades to "no rate limiting" instead of "gateway down."
+
+## Two independent layers
+
+1. **Per-key budget** - if a scoped API key has `rate_limit_per_minute` set, it's checked first, as a sliding window over 60 seconds.
+2. **Rate limit rules** - separately configured `RateLimitRule` rows, each scoped to a dimension. A request can match several rules at once (e.g. a tight per-project rule *and* a looser global default) - it's rejected if it violates *any* matching enabled rule.
+
+## Scopes
+
+| `scope_type` | `scope_value` |
+|---|---|
+| `global` | none (`null`) - applies to every request |
+| `organization` | organization ID |
+| `project` | project ID |
+| `provider` | provider name |
+| `api_key` | API key ID |
+| `endpoint` | request path, e.g. `/v1/chat/completions` |
+
+## Algorithms
+
+Set per rule via `algorithm`:
+
+- `fixed_window` - a hard count reset at fixed interval boundaries.
+- `sliding_window` - a rolling window, smoother than fixed window at the boundary.
+- `token_bucket` - refills at `limit / window_seconds` per second, up to a burst capacity of `limit`, implemented as a Lua script for atomic check-and-decrement in Redis.
+
+## Managing rules
+
+```bash
+curl -X POST http://localhost:8000/rate-limits \
+  -H "Content-Type: application/json" \
+  -d '{"scope_type": "project", "scope_value": "<project-id>", "algorithm": "sliding_window", "limit": 100, "window_seconds": 60}'
+
+curl "http://localhost:8000/rate-limits?scope_type=project"
+curl -X PATCH http://localhost:8000/rate-limits/{id} -d '{"enabled": false}'
+curl -X DELETE http://localhost:8000/rate-limits/{id}
+```
+
+## Client behavior on 429
+
+A blocked request gets `429 Too Many Requests` with a `Retry-After` header (seconds) and a `detail` naming which scope was exceeded - useful for distinguishing "your key's own budget" from "this project's shared limit" when debugging.

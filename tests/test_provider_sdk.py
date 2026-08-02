@@ -1,4 +1,5 @@
-from typing import Any, Dict
+from typing import Any
+
 import pytest
 
 from packages.plugin_sdk import (
@@ -16,7 +17,7 @@ class MockProvider(ProviderPlugin):
     name = "mock_provider"
     provider_name = "mock"
 
-    async def chat(self, request: ChatRequest) -> Dict[str, Any]:
+    async def chat(self, request: ChatRequest) -> dict[str, Any]:
         return {
             "id": "chatcmpl-mock-123",
             "object": "chat.completion",
@@ -24,20 +25,20 @@ class MockProvider(ProviderPlugin):
             "choices": [{"message": {"role": "assistant", "content": "Mock response"}}],
         }
 
-    async def embeddings(self, request: EmbeddingRequest) -> Dict[str, Any]:
+    async def embeddings(self, request: EmbeddingRequest) -> dict[str, Any]:
         return {
             "object": "list",
             "model": request.model,
             "data": [{"object": "embedding", "embedding": [0.1, 0.2, 0.3], "index": 0}],
         }
 
-    async def image(self, request: ImageRequest) -> Dict[str, Any]:
+    async def image(self, request: ImageRequest) -> dict[str, Any]:
         return {
             "created": 1600000000,
             "data": [{"url": "https://example.com/mock-image.png"}],
         }
 
-    async def audio(self, request: AudioRequest) -> Dict[str, Any]:
+    async def audio(self, request: AudioRequest) -> dict[str, Any]:
         return {"text": "Mock audio transcription text"}
 
     async def health(self) -> ProviderHealthResponse:

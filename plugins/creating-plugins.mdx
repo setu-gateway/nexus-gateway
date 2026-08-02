@@ -3,20 +3,58 @@ title: "Creating Plugins"
 description: "Step-by-step guide to writing custom Setu Gateway plugins."
 ---
 
-# Creating a Plugin
+Plugins are Python classes subclassing `BasePlugin` (or `ProviderPlugin` for an LLM provider adapter - see [Providers](/providers/openai)) from `packages/plugin_sdk`. There's no separate package to install - it's part of this repo.
 
-Use `@setu/plugin-sdk` to author custom plugins.
+## A minimal plugin
 
-## Example Plugin Code
+This is the actual, working example at `plugins/hello_world/plugin.py`:
 
-```typescript
-import { GatewayPlugin, RequestContext } from "@setu/plugin-sdk";
+```python
+from typing import Optional
+from packages.plugin_sdk import BasePlugin, PluginContext
+from packages.shared.logging.logger import get_logger
 
-export class CustomHeaderPlugin implements GatewayPlugin {
-  name = "custom-header-plugin";
+logger = get_logger("plugin.hello_world")
 
-  async onRequest(context: RequestContext): Promise<void> {
-    context.headers["X-Custom-Gateway-Header"] = "enabled";
-  }
-}
+
+class HelloWorldPlugin(BasePlugin):
+    name: str = "hello_world"
+    version: str = "0.1.0"
+    description: str = "Demonstration Hello World plugin"
+
+    async def on_load(self, context: Optional[PluginContext] = None) -> None:
+        logger.info("Hello World Plugin initialized successfully!")
+
+    async def on_request(self, context: PluginContext) -> None:
+        context.headers["X-Hello-Plugin"] = "Hello World!"
+        context.state["hello_world_executed"] = True
+
+    async def on_response(self, context: PluginContext) -> None:
+        context.headers["X-Hello-Response"] = "Processed"
+
+    async def on_unload(self) -> None:
+        logger.info("Hello World Plugin unloaded cleanly")
 ```
+
+`PluginContext` carries `request_id`, `trace_id`, `path`, `headers` (mutable - a plugin can add response headers), `state` (a free-form dict for passing data between a plugin's own hooks across one request), and `metadata`.
+
+As covered in [Plugins Overview](/plugins/overview#an-important-caveat), these hooks aren't invoked automatically by the gateway's request path yet - `PluginLoader` (`apps/gateway/plugins/loader.py`) can run them, but nothing calls `PluginLoader` today. You can instantiate and test a plugin directly:
+
+```python
+import asyncio
+from packages.plugin_sdk import PluginContext
+from plugins.hello_world.plugin import HelloWorldPlugin
+
+async def main():
+    plugin = HelloWorldPlugin()
+    ctx = PluginContext(request_id="test-123")
+    await plugin.on_load()
+    await plugin.on_request(ctx)
+    print(ctx.headers)  # {'X-Hello-Plugin': 'Hello World!'}
+
+asyncio.run(main())
+```
+
+## Writing a provider plugin instead
+
+If you're adding a new LLM provider rather than a generic request-lifecycle plugin, subclass `ProviderPlugin` and implement `chat`, `embeddings`, `image`, `audio`, `health`, and `models` - see any file under `plugins/providers/` for the real pattern, including the "mock response when no API key is configured" convention every existing adapter follows.

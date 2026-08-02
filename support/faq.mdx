@@ -1,0 +1,40 @@
+---
+title: "FAQ"
+description: "Frequently asked questions"
+---
+
+### Do I need an API key to use the gateway?
+
+No - `/v1/*` endpoints work unauthenticated. A Setu-issued key (`sk_setu_...`) is optional and adds attribution, permission scoping, rate limiting, and provider/model restrictions. See [Authentication](/api/authentication).
+
+### What's the difference between my provider's API key and a Setu API key?
+
+Your provider's key (`OPENAI_API_KEY`, etc.) is a server-side secret the gateway uses to call the real upstream API - you set it once, in the gateway's own environment. A Setu key (`sk_setu_...`) is what your applications present *to the gateway* - a completely different credential, optional, and never sent upstream. See [Quickstart](/getting-started/quickstart).
+
+### Is the response cache semantic (does it match similar prompts)?
+
+No - it's an exact-match cache on `(provider, model, messages, temperature, top_p, tools)`. Two prompts that mean the same thing but aren't byte-identical after that normalization are cache misses of each other. See [Caching](/features/caching).
+
+### Which providers make real API calls vs. return mock data?
+
+All five make real calls when their API key is configured: OpenAI, Ollama, Groq stream incrementally; Anthropic and Gemini currently deliver streaming responses as a single chunk rather than token-by-token (see [Troubleshooting](/support/troubleshooting)). Every provider falls back to a deterministic mock response when no key is configured, so the gateway is fully testable without any credentials.
+
+### Can I use tool calling / function calling?
+
+Not yet end-to-end. `tools` is accepted in the request and included in the cache key, but isn't forwarded to any provider - defining tools won't currently produce tool calls in responses.
+
+### Does routing pick the cheapest or fastest provider automatically?
+
+Depends on the configured [routing policy](/features/routing) - `highest_availability` (the default) ranks by trust score and latency, not cost. Set `lowest_cost` (globally via `ROUTING_DEFAULT_POLICY`, or per-request via `X-Setu-Routing-Policy`) if cost is what you want to optimize for.
+
+### How do I see why a request was routed to a particular provider?
+
+Send `X-Setu-Debug: true` - the response includes an `X-Setu-Routing-Debug` header with the full routing decision: every candidate considered, the fallback chain, and a human-readable reason. See [Routing](/features/routing).
+
+### Is Setu Gateway production-ready?
+
+It's pre-release. The core request path (auth, routing, caching, rate limiting, analytics) is real and tested, but see [Troubleshooting](/support/troubleshooting) for specific gaps (dashboard-management endpoints have no auth enforcement yet; the generic plugin lifecycle isn't wired into live requests). Treat it as suitable for self-hosting and evaluation today, not yet as a hardened multi-tenant SaaS platform.
+
+### Where do I report a bug or request a feature?
+
+[GitHub Issues](https://github.com/setu-gateway/nexus-gateway/issues). Security issues specifically should go through the process in [SECURITY.md](https://github.com/setu-gateway/nexus-gateway/blob/main/SECURITY.md), not a public issue.

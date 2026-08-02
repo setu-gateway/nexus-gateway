@@ -3,12 +3,45 @@ title: "Contributing Guide"
 description: "How to contribute to Setu Gateway."
 ---
 
-# Contributing to Setu Gateway
+We welcome community contributions - bug fixes, provider/plugin implementations,
+documentation, tests, and design feedback. This page is the starting point if you have
+no prior familiarity with the codebase; the rest of this section covers specifics.
 
-We welcome community contributions! Please read these guidelines before submitting a pull request.
+## Where things live
 
-## How to Help
+- `apps/gateway/` - the FastAPI gateway service (Python): routing, auth, caching,
+  analytics, the evaluation engine, and everything else the running service does.
+- `apps/dashboard/` - the React/TypeScript web dashboard.
+- `plugins/providers/` - one subdirectory per LLM provider (OpenAI, Anthropic, Gemini,
+  Groq, Ollama), each implementing the same `ProviderPlugin` interface from
+  `packages/plugin_sdk/`.
+- `packages/cli/` - the `setu` command-line tool.
+- `packages/sdk-python/` and `packages/sdk-typescript/` - independently-versioned
+  client SDKs, each with their own tests and release lifecycle.
+- `tests/` - the Python test suite (gateway, CLI, plugins).
+- `getting-started/`, `features/`, `providers/`, `deployment/`, etc. (repo root) - the
+  Mintlify documentation site content (`docs.json` is the nav).
 
-- Report bugs or request features in GitHub Issues.
-- Submit provider adapters or plugin implementations.
-- Improve documentation and code examples.
+## How to help
+
+- Report bugs or request features using the [issue templates](https://github.com/setu-gateway/nexus-gateway/issues/new/choose).
+- Pick up an issue labeled `good first issue` or `help wanted`.
+- Submit provider adapters or plugin implementations (see
+  [Building a Plugin](/plugins/creating-plugins)).
+- Improve documentation - flag or fix anything that no longer matches the real behavior.
+
+## Before you open a PR
+
+1. [Set up your local environment](/contributing/development).
+2. Check [Code Style & Standards](/contributing/code-style) for what CI actually enforces.
+3. For a substantial feature or a public API change, open an issue first - see
+   [CONTRIBUTING.md](https://github.com/setu-gateway/nexus-gateway/blob/main/CONTRIBUTING.md)
+   in the repository root for the full workflow (branch naming, commit conventions,
+   definition of done).
+4. Cutting an actual release is a maintainer task - see
+   [Release Process](/contributing/release-process) if you're curious how it works.
+
+By contributing, you agree to follow the
+[Code of Conduct](https://github.com/setu-gateway/nexus-gateway/blob/main/CODE_OF_CONDUCT.md).
+Found a security issue? Do not open a public issue - see
+[SECURITY.md](https://github.com/setu-gateway/nexus-gateway/blob/main/SECURITY.md).

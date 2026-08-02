@@ -1,0 +1,35 @@
+---
+title: "Caching"
+description: "The tiered response cache: what gets cached, how the key is computed, and how to control it"
+---
+
+Setu caches `/v1/chat/completions` responses (streaming and non-streaming) in a three-tier cache, checked in order: **in-process memory** → **Redis** → **Postgres**. A hit at any tier is served without calling the provider; a miss falls through to the next tier, and a fresh response populates all three on write.
+
+This is an **exact-match** cache, not semantic/embedding-based - two prompts that mean the same thing but aren't byte-identical (after normalization) are cache misses of each other.
+
+## Cache key
+
+Computed from `(provider, upstream_model, messages, temperature, top_p, tools)` - `apps/gateway/cache/keys.py`. Same messages against a different model, or the same messages with a different `temperature`, are different cache entries. `tools` is included in the key even though tool-calling isn't forwarded to providers yet, so enabling it later won't silently serve stale cached responses from before tools existed in the request.
+
+## Policy
+
+Caching is enabled by default. Override per-project via the cache policy API (`CachePolicy` rows, keyed by `project_id`) - `enabled` and `ttl_seconds` are both configurable. A request with no resolved project (no API key presented) uses the global default: enabled, with a fixed TTL.
+
+## Streaming responses
+
+A cached streaming response replays the exact original SSE chunks - it isn't re-generated from a stored final answer. A cached **streaming** entry can serve a later **non-streaming** request for the same key (the chunks are reassembled into a single response body), but not the reverse: a cached non-streaming entry can't synthesize a plausible stream, so that combination is treated as a miss.
+
+## Cache hits and analytics
+
+A cache hit still records a `request_logs` row (`cache_hit: true`, `estimated_cost: 0.0`) and still respects the routing decision that would have been made - the cache key is computed against the *primary* candidate specifically, not the whole fallback chain, so a hit means "the primary provider would have returned this," consistently with what a live call to it would do.
+
+## Cache endpoints
+
+```bash
+curl http://localhost:8000/cache/policy?project_id=...   # GET  - current policy
+curl -X PUT http://localhost:8000/cache/policy -d '{...}' # PUT  - update enabled/ttl_seconds for a project
+curl http://localhost:8000/cache/stats                    # GET  - hit/miss counts
+curl -X DELETE http://localhost:8000/cache                # DELETE - clear all tiers
+```
+
+or via the CLI: `setu cache clear`. See [CLI Commands](/cli/commands).

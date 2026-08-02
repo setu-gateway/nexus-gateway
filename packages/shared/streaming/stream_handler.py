@@ -1,6 +1,7 @@
 import asyncio
 import json
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
+
 from packages.shared.logging.logger import get_logger
 
 logger = get_logger("stream_handler")

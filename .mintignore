@@ -5,3 +5,15 @@
 # Draft content
 drafts/
 *.draft.mdx
+
+# The docs site's project root is the repo root (docs.json lives here, not under a
+# separate docs/ subdirectory) - without this, Mintlify's custom-component discovery
+# treats the dashboard's own .tsx application source as importable documentation
+# components and fails validation on their normal React imports.
+apps/dashboard/
+
+# .venv isn't in Mintlify's default auto-ignore list (unlike node_modules) - without
+# this, `mint broken-links` tries to parse vendored dependencies' own .md files
+# (e.g. nltk's AUTHORS.md) as MDX and fails on syntax that was never meant to be MDX.
+.venv/
+packages/sdk-python/.venv/

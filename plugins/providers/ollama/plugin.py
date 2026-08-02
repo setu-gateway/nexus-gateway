@@ -1,7 +1,9 @@
-from typing import Any, AsyncGenerator, Dict, List, Optional
 import json
 import os
 import time
+from collections.abc import AsyncGenerator
+from typing import Any
+
 import httpx
 
 from packages.plugin_sdk import (
@@ -32,7 +34,7 @@ class OllamaProviderPlugin(ProviderPlugin):
     name: str = "Ollama Local Provider Adapter"
     provider_name: str = "ollama"
 
-    def __init__(self, base_url: Optional[str] = None):
+    def __init__(self, base_url: str | None = None):
         self.base_url = (base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")).rstrip("/")
 
     async def chat(self, request: ChatRequest) -> Any:
@@ -113,33 +115,32 @@ class OllamaProviderPlugin(ProviderPlugin):
 
         any_real_chunk_sent = False
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                async with client.stream("POST", url, json=payload) as resp:
-                    resp.raise_for_status()
-                    async for line in resp.aiter_lines():
-                        if line:
-                            data = json.loads(line)
-                            content = data.get("message", {}).get("content", "")
-                            is_done = data.get("done", False)
+            async with httpx.AsyncClient(timeout=60.0) as client, client.stream("POST", url, json=payload) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if line:
+                        data = json.loads(line)
+                        content = data.get("message", {}).get("content", "")
+                        is_done = data.get("done", False)
 
-                            event = {
-                                "id": "chatcmpl-ollama-stream",
-                                "object": "chat.completion.chunk",
-                                "created": int(time.time()),
-                                "model": request.model,
-                                "choices": [
-                                    {
-                                        "index": 0,
-                                        "delta": {"content": content},
-                                        "finish_reason": "stop" if is_done else None,
-                                    }
-                                ],
-                            }
-                            any_real_chunk_sent = True
-                            yield f"data: {json.dumps(event)}\n\n"
-                            if is_done:
-                                break
-                    yield "data: [DONE]\n\n"
+                        event = {
+                            "id": "chatcmpl-ollama-stream",
+                            "object": "chat.completion.chunk",
+                            "created": int(time.time()),
+                            "model": request.model,
+                            "choices": [
+                                {
+                                    "index": 0,
+                                    "delta": {"content": content},
+                                    "finish_reason": "stop" if is_done else None,
+                                }
+                            ],
+                        }
+                        any_real_chunk_sent = True
+                        yield f"data: {json.dumps(event)}\n\n"
+                        if is_done:
+                            break
+                yield "data: [DONE]\n\n"
         except _CONNECTION_UNAVAILABLE_ERRORS:
             # Only fall back to a fake stream for "never got started" failures - once
             # real content has already gone out, blending in mock chunks after it would
@@ -165,7 +166,7 @@ class OllamaProviderPlugin(ProviderPlugin):
                 yield f"data: {json.dumps(event)}\n\n"
             yield "data: [DONE]\n\n"
 
-    async def embeddings(self, request: EmbeddingRequest) -> Dict[str, Any]:
+    async def embeddings(self, request: EmbeddingRequest) -> dict[str, Any]:
         """Generate text vector embeddings using local Ollama embeddings endpoint."""
         url = f"{self.base_url}/api/embeddings"
         prompt_text = request.input[0] if isinstance(request.input, list) else request.input
@@ -192,10 +193,10 @@ class OllamaProviderPlugin(ProviderPlugin):
                 "model": request.model,
             }
 
-    async def image(self, request: ImageRequest) -> Dict[str, Any]:
+    async def image(self, request: ImageRequest) -> dict[str, Any]:
         return {"error": "Image generation not supported on Ollama local runner"}
 
-    async def audio(self, request: AudioRequest) -> Dict[str, Any]:
+    async def audio(self, request: AudioRequest) -> dict[str, Any]:
         return {"error": "Audio transcription not supported on Ollama local runner"}
 
     async def health(self) -> ProviderHealthResponse:

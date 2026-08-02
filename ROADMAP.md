@@ -1,33 +1,37 @@
 # Setu Gateway Roadmap
 
-The roadmap is directional, not a promise. Priorities are guided by the project's principles: faster, cheaper, smarter, safer, and easier AI infrastructure.
+The roadmap is directional, not a promise - priorities shift as real usage and
+contributions come in. For what's already shipped, see [CHANGELOG.md](CHANGELOG.md).
 
-## Milestone 0 — Architecture and community foundation
+## v0.2 — Provider expansion
 
-- RFC library and engineering principles
-- Contributor and security policies
-- Monorepo, local development, CI, and Docker Compose
+- Mistral provider integration.
+- Anthropic, Gemini, and Groq are already real integrations as of v0.1.0 - the
+  remaining gap in provider coverage is Mistral.
 
-## Milestone 1 — Gateway core
+## v0.3 — Extensibility
 
-- FastAPI gateway, validated configuration, structured logging
-- PostgreSQL and Redis connectivity
-- Health, readiness, liveness, and version endpoints
-- Plugin loader and `setu doctor`
+- Plugin Marketplace - a way to discover and install community-built plugins, rather
+  than only the ones bundled in this repo.
+- AI Workflow Engine - chaining multiple requests/providers into a single defined
+  pipeline, beyond today's single-request routing.
+- MCP enhancements - v0.1.0 ships server registration and tool invocation as a
+  foundation; this expands on it (more transport options, richer tool-call handling).
 
-## Milestone 2 — Identity and tenancy
+## v0.4 — Enterprise readiness
 
-- Users, personal workspaces, organizations, projects, RBAC, and scoped API keys
+- Enterprise SSO (SAML/OIDC) for dashboard and API access.
+- Multi-region deployment support.
+- High availability guidance and tooling for the gateway and its datastores.
 
-## Milestone 3 — OpenAI-compatible multi-provider gateway
+## v1.0 — Stable
 
-- Chat completions, embeddings, streaming
-- OpenAI and Ollama providers, then additional providers
+- A frozen, stable public API with a documented deprecation policy.
+- Long-term support (LTS) commitments for stable releases.
+- Enterprise-grade documentation (SLAs, support channels, compliance references).
 
-## Milestone 4 — Intelligent routing
+## Have a request?
 
-- Capability registry, policies, explainability, simulation, fallbacks, and health-aware routing
-
-## Later
-
-- Dashboard, analytics, cache intelligence, firewall, Benchmark Lab, Time Machine, Marketplace, MCP Hub, and Nexus Flow-compatible pipelines.
+Open a [feature request](https://github.com/setu-gateway/nexus-gateway/issues/new/choose)
+or start a [discussion](https://github.com/setu-gateway/nexus-gateway/discussions) -
+roadmap priorities are shaped by what the community actually needs.

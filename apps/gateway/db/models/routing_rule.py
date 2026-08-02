@@ -1,8 +1,7 @@
-from datetime import datetime, timezone
-from typing import Optional
 import uuid
+from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from apps.gateway.db.base import Base
@@ -21,9 +20,7 @@ class RoutingRule(Base):
     __tablename__ = "routing_rules"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    organization_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
-    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
 
     # Condition: "<field> <operator> <value>", e.g. "latency > 500ms". Parsed by
@@ -33,12 +30,10 @@ class RoutingRule(Base):
 
     # Action: "fallback" | "use" | "reject".
     action_type: Mapped[str] = mapped_column(String(20), nullable=False)
-    action_provider: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    action_provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     priority: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)

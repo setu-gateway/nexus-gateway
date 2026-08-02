@@ -1,5 +1,5 @@
-from fastapi.testclient import TestClient
 import pytest
+from fastapi.testclient import TestClient
 
 from apps.gateway.auth.security import (
     create_access_token,
@@ -99,7 +99,7 @@ async def test_auth_edge_cases(db_session):
     # Passing Refresh Token to /auth/me (should fail)
     access_token = create_access_token({"sub": "user1", "email": "inactive@setu.io"})
     refresh_token = create_refresh_token({"sub": "user1", "email": "inactive@setu.io"})
-    
+
     me_with_refresh = client.get("/auth/me", headers={"Authorization": f"Bearer {refresh_token}"})
     assert me_with_refresh.status_code == 401
 

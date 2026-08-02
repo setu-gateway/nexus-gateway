@@ -1,5 +1,4 @@
 from fastapi.testclient import TestClient
-import pytest
 
 from apps.gateway.main import app
 
@@ -11,7 +10,7 @@ def test_serve_playground_ui_endpoint():
     assert resp.status_code == 200
     assert "text/html" in resp.headers["content-type"]
     assert "Setu Gateway — Provider Playground" in resp.text
-    assert "button class=\"btn-submit\"" in resp.text
+    assert 'button class="btn-submit"' in resp.text
 
 
 def test_playground_completion_endpoint_success():

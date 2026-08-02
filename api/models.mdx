@@ -3,9 +3,7 @@ title: "Models API"
 description: "List available LLM models and provider routes."
 ---
 
-# `GET /v1/models`
-
-Lists all active model endpoints configured across providers in Setu Gateway.
+Lists the model catalog (`apps/gateway/models/catalog.py`), plus any locally-pulled Ollama models discovered dynamically from the Ollama server at request time - so this list can grow without a gateway restart if you `ollama pull` something new.
 
 ## Response
 
@@ -16,13 +14,27 @@ Lists all active model endpoints configured across providers in Setu Gateway.
     {
       "id": "gpt-4o",
       "object": "model",
-      "owned_by": "openai"
+      "created": 1600000000,
+      "owned_by": "openai",
+      "permission": [],
+      "root": "gpt-4o",
+      "parent": null
     },
     {
-      "id": "claude-3-5-sonnet-20241022",
+      "id": "claude-3-5-sonnet",
       "object": "model",
-      "owned_by": "anthropic"
+      "created": 1600000000,
+      "owned_by": "anthropic",
+      "permission": [],
+      "root": "claude-3-5-sonnet-20241022",
+      "parent": null
     }
   ]
 }
 ```
+
+`id` is the unified model ID to use in `/v1/chat/completions` requests; `root` is the actual upstream model ID the provider receives. `created`/`permission`/`parent` are OpenAI-schema compatibility fields, not meaningful values from Setu's side.
+
+## Auth
+
+Optional, same as [chat completions](/api/chat) - a presented key needs `models_read` permission.

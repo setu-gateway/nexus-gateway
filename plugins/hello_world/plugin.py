@@ -1,4 +1,3 @@
-from typing import Optional
 from packages.plugin_sdk import BasePlugin, PluginContext
 from packages.shared.logging.logger import get_logger
 
@@ -12,7 +11,7 @@ class HelloWorldPlugin(BasePlugin):
     version: str = "0.1.0"
     description: str = "Demonstration Hello World plugin"
 
-    async def on_load(self, context: Optional[PluginContext] = None) -> None:
+    async def on_load(self, context: PluginContext | None = None) -> None:
         logger.info("Hello World Plugin initialized successfully!")
 
     async def on_request(self, context: PluginContext) -> None:

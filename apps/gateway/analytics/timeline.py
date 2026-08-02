@@ -1,4 +1,3 @@
-from typing import Dict
 import time
 
 
@@ -10,7 +9,7 @@ class RequestTimeline:
 
     def __init__(self) -> None:
         self._start = time.monotonic()
-        self._stages: Dict[str, float] = {}
+        self._stages: dict[str, float] = {}
         self.mark("received")
 
     def mark(self, stage: str) -> float:
@@ -18,7 +17,7 @@ class RequestTimeline:
         self._stages[stage] = elapsed_ms
         return elapsed_ms
 
-    def as_dict(self) -> Dict[str, float]:
+    def as_dict(self) -> dict[str, float]:
         return dict(self._stages)
 
     @property

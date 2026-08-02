@@ -1,3 +1,5 @@
+import pytest
+
 from apps.gateway.api.openai_v1 import ChatCompletionMessage, _detects_vision_request
 from apps.gateway.models.catalog import ModelRegistry
 from apps.gateway.providers.health_monitor import ProviderHealthMonitor
@@ -5,7 +7,6 @@ from apps.gateway.providers.registry import ProviderRegistry
 from apps.gateway.routing.config import RoutingConfig
 from apps.gateway.routing.engine import NoHealthyProviderError, RoutingEngine
 from apps.gateway.routing.policies import RoutingPolicy
-import pytest
 
 
 class _FakeProvider:
@@ -145,9 +146,7 @@ def test_weighted_policy_falls_back_to_equal_weights_when_unconfigured():
 
 def test_capability_based_routing_filters_to_vision_capable_providers():
     engine, *_ = _make_engine()
-    decision = engine.route(
-        "gpt-4o-mini", policy=RoutingPolicy.CAPABILITY_BASED, required_capability="vision"
-    )
+    decision = engine.route("gpt-4o-mini", policy=RoutingPolicy.CAPABILITY_BASED, required_capability="vision")
     # groq/ollama/anthropic's "fast" tier models don't support vision - only openai
     # (primary) and gemini's vision-capable equivalent should ever be considered.
     assert set(decision.fallback_chain) <= {"openai", "gemini"}

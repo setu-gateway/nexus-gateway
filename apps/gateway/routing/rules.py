@@ -1,6 +1,6 @@
-from enum import Enum
-from typing import Any, List, Optional
 import re
+from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -34,16 +34,16 @@ class RuleSpec(BaseModel):
     name: str
     condition_expression: str
     action_type: RuleActionType
-    action_provider: Optional[str] = None
+    action_provider: str | None = None
     priority: int = 100
     enabled: bool = True
 
 
 class RuleOutcome(BaseModel):
     matched: bool
-    rule_name: Optional[str] = None
-    action_type: Optional[RuleActionType] = None
-    action_provider: Optional[str] = None
+    rule_name: str | None = None
+    action_type: RuleActionType | None = None
+    action_provider: str | None = None
 
 
 _CONDITION_PATTERN = re.compile(r"^\s*(?P<field>[a-zA-Z_]+)\s*(?P<operator>==|!=|>=|<=|>|<)\s*(?P<value>.+?)\s*$")
@@ -120,7 +120,7 @@ def _condition_matches(condition: ParsedCondition, context: dict) -> bool:
     }.get(condition.operator, False)
 
 
-def evaluate_rules(rules: List[RuleSpec], context: dict) -> RuleOutcome:
+def evaluate_rules(rules: list[RuleSpec], context: dict) -> RuleOutcome:
     """Evaluate rules in priority order (lowest number first) against a request
     context, returning the first match. `context` keys: latency_ms, estimated_cost,
     provider_status ('available' | 'unavailable')."""
@@ -141,13 +141,11 @@ def evaluate_rules(rules: List[RuleSpec], context: dict) -> RuleOutcome:
     return RuleOutcome(matched=False)
 
 
-async def load_org_rules(db: AsyncSession, organization_id: Any) -> List[RuleSpec]:
+async def load_org_rules(db: AsyncSession, organization_id: Any) -> list[RuleSpec]:
     """Fetch an organization's enabled routing rules from the database as RuleSpecs."""
     from apps.gateway.db.models import RoutingRule  # local import avoids a routing<->db cycle at module load
 
-    result = await db.execute(
-        select(RoutingRule).where(RoutingRule.organization_id == organization_id, RoutingRule.enabled.is_(True))
-    )
+    result = await db.execute(select(RoutingRule).where(RoutingRule.organization_id == organization_id, RoutingRule.enabled.is_(True)))
     rows = result.scalars().all()
     return [
         RuleSpec(

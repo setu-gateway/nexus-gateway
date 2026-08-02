@@ -1,6 +1,6 @@
-from typing import Any, Dict, List, Optional, Tuple
 import asyncio
 import time
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -18,18 +18,18 @@ class ReplayResult(BaseModel):
     upstream_model: str
     success: bool
     latency_ms: float
-    response: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
+    response: dict[str, Any] | None = None
+    error: str | None = None
 
 
 async def replay_request(
     provider_registry: ProviderRegistry,
-    candidates: List[Tuple[str, str]],
-    messages: List[Dict[str, Any]],
-    temperature: Optional[float] = 0.7,
-    top_p: Optional[float] = 1.0,
-    max_tokens: Optional[int] = None,
-) -> List[ReplayResult]:
+    candidates: list[tuple[str, str]],
+    messages: list[dict[str, Any]],
+    temperature: float | None = 0.7,
+    top_p: float | None = 1.0,
+    max_tokens: int | None = None,
+) -> list[ReplayResult]:
     """Run the same messages against every (provider, upstream_model) pair in
     `candidates` concurrently, returning each outcome independently - one provider
     erroring never affects the others' results."""

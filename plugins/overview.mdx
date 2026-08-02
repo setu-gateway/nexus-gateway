@@ -3,14 +3,21 @@ title: "Plugins Overview"
 description: "Understanding the plugin architecture in Setu Gateway."
 ---
 
-# Plugin System Overview
+Plugins are Python classes implementing a shared lifecycle interface (`packages/plugin_sdk`), loaded and versioned independently of the gateway's own code.
 
-Setu Gateway features a modular plugin architecture for extending request processing pipelines.
+## What's real today
 
-## Plugin Types
+Two plugin base classes actually exist and are used in production:
 
-- **Provider Plugins**: Custom LLM model integrations.
-- **Auth Plugins**: Third-party authentication mechanisms.
-- **Analytics Plugins**: Export request metrics to custom telemetry sinks.
-- **Billing Plugins**: Rate limiting and usage accounting.
-- **Notification Plugins**: Webhook alerts on errors or budget thresholds.
+- **`BasePlugin`** (`packages/plugin_sdk/src/plugin.py`) - the generic interface: `on_load`, `on_request`, `on_response`, `on_unload`, each given a `PluginContext` (request ID, trace ID, path, headers, a free-form `state` dict, and `metadata`).
+- **`ProviderPlugin`** (`packages/plugin_sdk/src/provider.py`) - extends `BasePlugin` with the methods an LLM provider adapter needs: `chat`, `embeddings`, `image`, `audio`, `health`, `models`. Every entry under `plugins/providers/` (OpenAI, Anthropic, Gemini, Ollama, Groq) is one of these - see [Providers](/providers/openai) for what each actually does. `plugins/hello_world/plugin.py` is a minimal, non-provider `BasePlugin` example.
+
+## An important caveat
+
+`apps/gateway/plugins/loader.py`'s `PluginLoader` implements `execute_on_request`/`execute_on_response`/`load_all`/`unload_all` - the machinery to run `BasePlugin` hooks across every loaded plugin - but nothing in the gateway's actual request path (`apps/gateway/api/openai_v1.py`) calls it yet. Writing an `on_request`/`on_response` hook today gets you a real, independently-testable unit; it does not run automatically on live traffic until this is wired in. `ProviderPlugin`'s methods (`chat`, etc.) are the exception - those genuinely are called on every request, since routing calls them directly rather than through the generic hook loader.
+
+## Planned, not yet built
+
+`plugins/auth/`, `plugins/billing/`, `plugins/notifications/`, and `plugins/analytics/` exist as directories with a README each, describing categories of plugin the project intends to support (custom auth mechanisms, usage-based billing integrations, alerting, telemetry export). None have an actual base class or implementation yet - there's no distinct interface for them beyond `BasePlugin` itself.
+
+## Next: [Creating Plugins](/plugins/creating-plugins)

@@ -1,20 +1,21 @@
 import asyncio
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
+
 import pytest
 
 from packages.shared.streaming import safe_sse_stream_generator
 
 
 async def mock_normal_stream() -> AsyncGenerator[str, None]:
-    yield "data: {\"choices\": [{\"delta\": {\"content\": \"Hello\"}}]}\n\n"
-    yield "data: {\"choices\": [{\"delta\": {\"content\": \" World\"}}]}\n\n"
+    yield 'data: {"choices": [{"delta": {"content": "Hello"}}]}\n\n'
+    yield 'data: {"choices": [{"delta": {"content": " World"}}]}\n\n'
     yield "data: [DONE]\n\n"
 
 
 async def mock_slow_stream() -> AsyncGenerator[str, None]:
-    yield "data: {\"choices\": [{\"delta\": {\"content\": \"First\"}}]}\n\n"
+    yield 'data: {"choices": [{"delta": {"content": "First"}}]}\n\n'
     await asyncio.sleep(0.5)  # Intentionally exceed short timeout
-    yield "data: {\"choices\": [{\"delta\": {\"content\": \"Second\"}}]}\n\n"
+    yield 'data: {"choices": [{"delta": {"content": "Second"}}]}\n\n'
 
 
 @pytest.mark.asyncio

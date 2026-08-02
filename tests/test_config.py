@@ -1,5 +1,5 @@
-from pydantic import ValidationError
 import pytest
+from pydantic import ValidationError
 
 from packages.shared.config.settings import AppSettings, load_settings, load_yaml_config
 

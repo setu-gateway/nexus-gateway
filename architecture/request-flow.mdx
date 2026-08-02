@@ -3,11 +3,25 @@ title: "Request Flow"
 description: "Detailed request execution pipeline from client to model provider."
 ---
 
-# Request Execution Flow
+Using `POST /v1/chat/completions` as the example (`apps/gateway/api/openai_v1.py`):
 
-1. **Ingress**: Client issues HTTP request to `/v1/chat/completions`.
-2. **Authentication**: Auth plugin validates bearer token and rate limit budget.
-3. **Routing**: Router evaluates model mapping, load balancing, and fallbacks.
-4. **Cache Lookup**: Cache layer checks Redis for hit. If hit, returns immediately.
-5. **Upstream Dispatch**: Proxy streams payload to destination LLM provider.
-6. **Egress & Analytics**: Response is streamed back to client; token metrics recorded.
+1. **Auth**: `resolve_auth_or_401` validates the API key (or JWT session) and checks
+   the `chat` permission. Missing/invalid auth on a Bearer-prefixed header returns
+   401; an authenticated key lacking permission returns 403.
+2. **Routing decision**: the routing engine maps the requested model to a ranked list
+   of provider candidates (`routing_engine.route`) - which providers can serve this
+   model, in what fallback order - without dispatching a request yet.
+3. **Rate limiting**: `enforce_rate_limits` checks the Redis-backed token bucket for
+   the resolved provider/key; exceeding the limit short-circuits with a 429 before
+   any provider is called.
+4. **Cache lookup**: an exact-match SHA-256 hash of the normalized request is checked
+   across the memory, Redis, and Postgres tiers in order. A hit returns immediately -
+   it does not go through routing's fallback chain, and it does **not** produce a
+   Time Machine entry (see [Caching](/architecture/caching)).
+5. **Provider dispatch**: on a cache miss, the gateway calls the first candidate's
+   provider plugin; on failure it falls back to the next candidate in the chain.
+6. **Recording**: the response is written back through the cache tiers, an analytics
+   row is recorded (provider, model, tokens, cost, latency, cache hit/miss), and - if
+   the request set `X-Setu-Time-Machine: true` - a Time Machine entry is recorded for
+   later replay. Both writes happen as fire-and-forget background tasks so they don't
+   add latency to the response.

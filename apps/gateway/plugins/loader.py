@@ -1,7 +1,6 @@
 import importlib
 import inspect
 from pathlib import Path
-from typing import Dict, List, Type
 
 from packages.plugin_sdk import BasePlugin, PluginContext
 from packages.shared.logging.logger import get_logger
@@ -13,7 +12,7 @@ class PluginLoader:
     """Dynamic Plugin Loader & Lifecycle Manager."""
 
     def __init__(self):
-        self.plugins: Dict[str, BasePlugin] = {}
+        self.plugins: dict[str, BasePlugin] = {}
 
     def register_plugin(self, plugin: BasePlugin) -> None:
         """Register a plugin instance."""
@@ -22,7 +21,7 @@ class PluginLoader:
         self.plugins[plugin.name] = plugin
         logger.info(f"Registered plugin: {plugin.name} (v{plugin.version})")
 
-    def discover_and_load_plugins(self, plugins_dir: str = "plugins") -> List[BasePlugin]:
+    def discover_and_load_plugins(self, plugins_dir: str = "plugins") -> list[BasePlugin]:
         """Scans plugins directory to dynamically load plugin classes."""
         dir_path = Path(plugins_dir)
         if not dir_path.exists():
@@ -33,12 +32,8 @@ class PluginLoader:
             module_name = f"{plugins_dir}.{path.parent.name}.plugin".replace("/", ".")
             try:
                 module = importlib.import_module(module_name)
-                for name, obj in inspect.getmembers(module):
-                    if (
-                        inspect.isclass(obj)
-                        and issubclass(obj, BasePlugin)
-                        and obj is not BasePlugin
-                    ):
+                for _name, obj in inspect.getmembers(module):
+                    if inspect.isclass(obj) and issubclass(obj, BasePlugin) and obj is not BasePlugin:
                         plugin_instance = obj()
                         self.register_plugin(plugin_instance)
             except Exception as e:

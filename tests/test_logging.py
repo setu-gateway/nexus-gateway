@@ -1,6 +1,6 @@
-import io
 import json
 import logging
+
 import pytest
 
 from packages.shared.logging.logger import (

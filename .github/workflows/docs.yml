@@ -2,15 +2,33 @@ name: Documentation CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - 'docs/**'
       - 'docs.json'
+      - 'getting-started/**'
+      - 'deployment/**'
+      - 'features/**'
+      - 'providers/**'
+      - 'plugins/**'
+      - 'cli/**'
+      - 'sdk/**'
+      - 'api/**'
+      - 'support/**'
+      - 'contributing/**'
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - 'docs/**'
       - 'docs.json'
+      - 'getting-started/**'
+      - 'deployment/**'
+      - 'features/**'
+      - 'providers/**'
+      - 'plugins/**'
+      - 'cli/**'
+      - 'sdk/**'
+      - 'api/**'
+      - 'support/**'
+      - 'contributing/**'
 
 jobs:
   validate-docs:
@@ -18,8 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
       - name: Install Mintlify CLI
