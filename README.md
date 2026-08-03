@@ -99,9 +99,10 @@ Setu is a monorepo (see [RFC-0001](rfcs/RFC-0001.md)):
 | [`apps/gateway`](apps/gateway) | The Python/FastAPI gateway — routing, auth, providers, plugins, database models. Also serves a built-in playground UI at `/playground`. |
 | [`apps/dashboard`](apps/dashboard) | Web dashboard for metrics, routing config, and API key management |
 | [`apps/docs`](apps/docs) | This documentation site (Mintlify) |
-| [`packages/`](packages) | Python & TypeScript SDKs, the plugin SDK, and the CLI |
+| [`apps/website`](apps/website) | The product/marketing site — deployment-ready (see [`DEPLOYMENT_RUNBOOK.md`](DEPLOYMENT_RUNBOOK.md)), not yet live on a public domain |
+| [`packages/`](packages) | Python, TypeScript, Go, Rust, Java, and C# SDKs, the plugin SDK, and the CLI |
 | [`plugins/`](plugins) | Provider adapters (OpenAI, Anthropic, Gemini, Groq, Ollama) and the plugin lifecycle interface |
-| [`infrastructure/`](infrastructure) | Docker Compose, Kubernetes manifests |
+| [`infrastructure/`](infrastructure) | Docker Compose, plain Kubernetes manifests, a Helm chart, a Kubernetes Operator, and a Terraform provider |
 | [`rfcs/`](rfcs) | Every accepted architectural decision behind this project |
 | [`tests/`](tests) | Unit and integration tests (400+, run against real PostgreSQL semantics) |
 
@@ -111,9 +112,10 @@ The backend is Python 3.10+, FastAPI, SQLAlchemy 2, PostgreSQL, and Redis. The d
 
 - **New to Setu?** Start with [Introduction](getting-started/introduction.mdx) → [Installation](getting-started/installation.mdx) → [Quickstart](getting-started/quickstart.mdx).
 - **Configuring providers?** See [`providers/`](providers) for OpenAI, Anthropic, Gemini, Groq, and Ollama setup.
-- **Deploying?** [Docker](deployment/docker.mdx), [Kubernetes](deployment/kubernetes.mdx), [Configuration reference](deployment/configuration.mdx).
-- **Using a specific feature?** [Routing](features/routing.mdx) · [Caching](features/caching.mdx) · [Time Machine](features/time-machine.mdx) · [Webhooks](features/webhooks.mdx) · [Rate Limiting](features/rate-limiting.mdx) · [Analytics](features/analytics.mdx).
-- **Integrating?** [Python SDK](sdk/python.mdx) · [TypeScript SDK](sdk/typescript.mdx) · [CLI](cli/commands.mdx) · [API reference](api/chat.mdx) · [runnable examples](examples/).
+- **Deploying?** [Docker](deployment/docker.mdx) · [Kubernetes](deployment/kubernetes.mdx) · [Configuration reference](deployment/configuration.mdx) · [Terraform](deployment/terraform.mdx) · [Helm](deployment/helm.mdx) · [Kubernetes Operator](deployment/kubernetes-operator.mdx) · publicly exposing the website/playground/marketplace: [`DEPLOYMENT_RUNBOOK.md`](DEPLOYMENT_RUNBOOK.md).
+- **Using a specific feature?** [Routing](features/routing.mdx) · [Caching](features/caching.mdx) · [Time Machine](features/time-machine.mdx) · [Webhooks](features/webhooks.mdx) · [Rate Limiting](features/rate-limiting.mdx) · [Analytics](features/analytics.mdx) · [Policy Engine](features/policy-engine.mdx) · [Cost Optimizer](features/cost-optimizer.mdx) · [Traffic Replay](features/traffic-replay.mdx).
+- **Integrating?** [Python](sdk/python.mdx) · [TypeScript](sdk/typescript.mdx) · [Go](sdk/go.mdx) · [Rust](sdk/rust.mdx) · [Java](sdk/java.mdx) · [C#](sdk/csharp.mdx) SDKs · [CLI](cli/commands.mdx) · [API reference](api/chat.mdx) · [runnable examples](examples/).
+- **Building a plugin?** [Plugin overview](plugins/overview.mdx) · [Marketplace](plugins/marketplace.mdx) · [Provider certification](plugins/provider-certification.mdx).
 - **Writing a plugin?** See [Plugin overview](plugins/overview.mdx) and [Creating plugins](plugins/creating-plugins.mdx).
 - **Something not working as expected?** [Troubleshooting](support/troubleshooting.mdx) and the [FAQ](support/faq.mdx) cover known gaps and gotchas candidly.
 - **Curious about a design decision?** Every major decision is an [RFC](rfcs) — start with [RFC-0000: Engineering Principles](rfcs/RFC-0000.md).

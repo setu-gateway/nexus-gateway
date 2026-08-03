@@ -1,0 +1,17 @@
+apiVersion: v2
+name: setu-gateway
+description: Enterprise-grade OpenAI-compatible AI Gateway - routing, auth, caching, and observability, self-hosted on Kubernetes.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/setu-gateway/nexus-gateway
+sources:
+  - https://github.com/setu-gateway/nexus-gateway
+maintainers:
+  - name: Setu Gateway Contributors
+    url: https://github.com/setu-gateway/nexus-gateway
+keywords:
+  - ai-gateway
+  - llm
+  - openai
+  - proxy

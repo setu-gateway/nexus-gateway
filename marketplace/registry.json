@@ -1,0 +1,40 @@
+{
+  "$schema": "./schema/plugin-manifest.schema.json",
+  "plugins": [
+    {
+      "name": "hello-world",
+      "displayName": "Hello World",
+      "category": "notifications",
+      "version": "0.1.0",
+      "author": "Setu Gateway Contributors",
+      "license": "Apache-2.0",
+      "repository": "https://github.com/setu-gateway/nexus-gateway",
+      "entryPoint": "plugins.hello_world.plugin.HelloWorldPlugin",
+      "description": "Demonstration plugin proving the gateway's plugin lifecycle (on_load/on_request/on_response/on_unload) - a reference for anyone building their first plugin.",
+      "setuVersion": ">=0.1.0"
+    },
+    {
+      "name": "openai-provider",
+      "displayName": "OpenAI (reference provider)",
+      "category": "providers",
+      "version": "0.1.0",
+      "author": "Setu Gateway Contributors",
+      "license": "Apache-2.0",
+      "repository": "https://github.com/setu-gateway/nexus-gateway",
+      "entryPoint": "plugins.providers.openai.plugin.OpenAIProviderPlugin",
+      "description": "Reference OpenAI provider adapter, bundled with the gateway - listed here as the canonical example of a fully-certified provider plugin manifest.",
+      "setuVersion": ">=0.1.0",
+      "certification": {
+        "certified": true,
+        "checks": [
+          { "name": "chat", "passed": true },
+          { "name": "streaming", "passed": true },
+          { "name": "embeddings", "passed": true },
+          { "name": "retry", "passed": true },
+          { "name": "health", "passed": true },
+          { "name": "authentication", "passed": true }
+        ]
+      }
+    }
+  ]
+}

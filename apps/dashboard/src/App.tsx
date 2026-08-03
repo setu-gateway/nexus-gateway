@@ -12,6 +12,8 @@ import { Errors } from "./pages/Errors";
 import { Organizations } from "./pages/Organizations";
 import { Projects } from "./pages/Projects";
 import { ApiKeys } from "./pages/ApiKeys";
+import { Community } from "./pages/Community";
+import { Studio } from "./pages/Studio";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -44,6 +46,8 @@ export function App() {
             <Route path="organizations" element={<Organizations />} />
             <Route path="projects" element={<Projects />} />
             <Route path="api-keys" element={<ApiKeys />} />
+            <Route path="community" element={<Community />} />
+            <Route path="studio" element={<Studio />} />
           </Route>
         </Routes>
       </BrowserRouter>

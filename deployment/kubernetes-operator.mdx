@@ -1,0 +1,60 @@
+---
+title: "Kubernetes Operator"
+description: "Automated gateway lifecycle management via a SetuGateway custom resource"
+---
+
+`infrastructure/k8s-operator` is a Kubernetes operator for advanced, automated lifecycle management, complementing the [Helm chart](/deployment/helm) - most deployments should start with Helm and adopt the operator only if they need what it adds. It manages a `SetuGateway` custom resource:
+
+```yaml
+apiVersion: setu.gateway.io/v1alpha1
+kind: SetuGateway
+metadata:
+  name: production
+spec:
+  image: ghcr.io/setu-gateway/gateway
+  version: v0.2.0    # edit this -> the Deployment's image converges (auto upgrade)
+  replicas: 3        # edit this -> the Deployment scales (scaling)
+  secretName: gateway-secrets
+  port: 8000
+```
+
+## Capabilities
+
+- **Auto upgrades** - edit `spec.version`; the managed Deployment's image converges to it without a manual `kubectl set image`.
+- **Scaling** - edit `spec.replicas`; the Deployment scales to match.
+- **Secret rotation** - the operator watches the Secret named by `spec.secretName`. When its contents change, it stamps a content-hash annotation onto the pod template, which triggers Kubernetes' normal rolling-restart behavior - no manual `kubectl rollout restart` needed.
+- **Health visibility** - `status.phase` (`Pending`/`Ready`/`Degraded`) and `status.readyReplicas` reflect the *actual* Deployment state via `kubectl get setugateway`, without a separate `kubectl get pods` lookup.
+
+## Install the CRD and run the operator
+
+```bash
+kubectl apply -f config/crd/bases/setu.gateway.io_setugateways.yaml
+go run .   # runs the manager against your current kubeconfig context
+```
+
+## Not yet built
+
+A container image and a real Helm/OLM-based install path for the operator itself aren't included - packaging and publishing it is a release/hosting decision, not something to bundle speculatively before the operator has real users. Today, running it means `go run .` against a checkout, pointed at whichever cluster your kubeconfig currently selects.
+
+## Verified against a real cluster, not just compiled
+
+All four capabilities above were exercised end-to-end against a real local [kind](https://kind.sigs.k8s.io/) cluster during development: a `SetuGateway` was created, its Deployment/Service came up with a real pod running the actual gateway image, `spec.replicas` was patched live with the pod count following, and the referenced Secret was rotated live (operator running continuously, no restart) with the pod rolling automatically. That pass caught and fixed two real bugs before they shipped: `imagePullPolicy` defaulting to `Always` for a `latest`-style tag (which ignored an image already loaded into the cluster via `kind load docker-image`), and the Secret watch not being wired up at all (a Secret-only change silently did nothing until this was fixed).
+
+Reproduce it yourself:
+
+```bash
+kind create cluster --name setu-operator-test
+kubectl apply -f config/crd/bases/setu.gateway.io_setugateways.yaml
+kind load docker-image <your-gateway-image>:latest --name setu-operator-test
+kubectl create secret generic gateway-secrets --from-literal=DATABASE_URL=... --from-literal=REDIS_URL=... --from-literal=JWT_SECRET=...
+go run .
+```
+
+## Regenerating the CRD / deepcopy code
+
+After changing `api/v1alpha1/setugateway_types.go`:
+
+```bash
+go run sigs.k8s.io/controller-tools/cmd/controller-gen object:headerFile="" paths="./api/..."
+go run sigs.k8s.io/controller-tools/cmd/controller-gen crd paths="./api/..." output:crd:artifacts:config=config/crd/bases
+```

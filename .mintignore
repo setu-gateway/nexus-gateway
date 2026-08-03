@@ -12,8 +12,20 @@ drafts/
 # components and fails validation on their normal React imports.
 apps/dashboard/
 
+# Same issue as apps/dashboard/ above, for the same reason: its own Vite+React
+# project root, not docs content - Mintlify's import resolution otherwise tries to
+# validate its plain npm imports (react, react-dom/client) as docs-relative paths.
+apps/website/
+
 # .venv isn't in Mintlify's default auto-ignore list (unlike node_modules) - without
 # this, `mint broken-links` tries to parse vendored dependencies' own .md files
 # (e.g. nltk's AUTHORS.md) as MDX and fails on syntax that was never meant to be MDX.
 .venv/
 packages/sdk-python/.venv/
+
+# Helm templates are Go-template YAML ({{ .Values... }}), not valid standalone
+# YAML/JSON - `mint validate`'s OpenAPI-spec auto-discovery scans every .yaml file in
+# the repo looking for extractable specs and fails parsing these as a result. None of
+# this directory is docs content; infrastructure/helm/README.md and
+# deployment/helm.mdx are the actual documentation for this chart.
+infrastructure/helm/setu-gateway/templates/

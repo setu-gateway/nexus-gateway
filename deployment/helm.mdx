@@ -1,0 +1,50 @@
+---
+title: "Helm Chart"
+description: "Deploying the gateway and dashboard to Kubernetes via Helm"
+---
+
+`infrastructure/helm/setu-gateway` is a templated alternative to the [plain Kubernetes manifests](/deployment/kubernetes) - use this if your cluster workflow is Helm-based, the plain manifests otherwise. This chart does not stand up PostgreSQL or Redis itself - bring your own (a managed service, or your cluster's own database operator/Helm chart) and point `secrets.data` (or `secrets.existingSecret`) at them.
+
+## Install
+
+```bash
+helm install setu ./infrastructure/helm/setu-gateway \
+  --set gateway.image.repository=ghcr.io/your-org/setu-gateway \
+  --set gateway.image.tag=v0.1.0 \
+  --set secrets.data.DATABASE_URL="postgresql://..." \
+  --set secrets.data.REDIS_URL="redis://..." \
+  --set secrets.data.JWT_SECRET="$(openssl rand -hex 32)"
+```
+
+Prefer `secrets.existingSecret` over `secrets.data` for anything beyond a first try - passing secrets via `--set` leaves them in your shell history and Helm's own release history. Point it at a Secret you manage through your normal secret-management path instead.
+
+## What's in `values.yaml`
+
+| Key | Purpose |
+| --- | --- |
+| `gateway.autoscaling` / `dashboard.autoscaling` | HorizontalPodAutoscaler on CPU utilization, off by default |
+| `ingress` | A single Ingress routing `/api` to the gateway and `/` to the dashboard |
+| `persistence` | Optional PVC + volume mount - the gateway is stateless by default; this is for a custom use case, not required |
+| `monitoring.serviceMonitor` | Prometheus Operator ServiceMonitor - **the gateway doesn't export a `/metrics` endpoint yet**, so this is correct-but-inert until it does. Enabling it today creates a ServiceMonitor pointed at an endpoint that doesn't exist. |
+| `secrets` | Either a chart-rendered Secret from `secrets.data`, or `secrets.existingSecret` naming one you manage yourself |
+
+## Verify
+
+```bash
+helm lint ./infrastructure/helm/setu-gateway
+helm template setu ./infrastructure/helm/setu-gateway
+```
+
+Both were run against every combination of this chart's feature toggles (autoscaling on/off, ingress on/off, persistence on/off, existing vs. chart-rendered secret) during development, not just the defaults.
+
+## After install
+
+Run migrations - this chart does not run them for you:
+
+```bash
+uv run alembic upgrade head
+```
+
+## Related: the Kubernetes Operator
+
+This chart handles a normal install/upgrade via `helm upgrade`. If you want auto-upgrade-on-spec-change, live scaling, and automatic secret-rotation rollouts *without* running `helm upgrade` yourself each time, see the [Kubernetes Operator](/deployment/kubernetes-operator) - a separate, more advanced tool that manages a `SetuGateway` custom resource on top of what this chart deploys.

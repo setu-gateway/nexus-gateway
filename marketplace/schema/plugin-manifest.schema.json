@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://setu-gateway.dev/schema/plugin-manifest.schema.json",
+  "title": "Setu Gateway Plugin Manifest",
+  "description": "One entry in marketplace/registry.json - describes a community-published plugin, mirroring the shape of the built-in plugins under plugins/ (see packages/plugin_sdk).",
+  "type": "object",
+  "required": ["name", "category", "version", "author", "license", "repository", "entryPoint", "description"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$",
+      "description": "Unique, lowercase, hyphenated identifier, e.g. 'my-vector-db-provider'."
+    },
+    "displayName": {
+      "type": "string",
+      "description": "Human-readable name shown in marketplace listings."
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "providers",
+        "authentication",
+        "analytics",
+        "caching",
+        "billing",
+        "routing-policies",
+        "notifications",
+        "storage",
+        "vector-databases"
+      ]
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?$",
+      "description": "Semantic version of this plugin release."
+    },
+    "author": {
+      "type": "string"
+    },
+    "license": {
+      "type": "string",
+      "description": "SPDX license identifier, e.g. 'Apache-2.0' or 'MIT'."
+    },
+    "repository": {
+      "type": "string",
+      "format": "uri",
+      "description": "Public source repository URL - required for the security review in DESIGN.md."
+    },
+    "entryPoint": {
+      "type": "string",
+      "description": "Python import path to the plugin class, e.g. 'my_plugin.provider.MyProviderPlugin', matching packages/plugin_sdk.BasePlugin's contract."
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "setuVersion": {
+      "type": "string",
+      "description": "Semver range of compatible Setu Gateway versions, e.g. '>=0.2.0'."
+    },
+    "certification": {
+      "type": "object",
+      "description": "Filled in by the registry, not the plugin author - the output of `setu certify` (apps/gateway/certification), only meaningful for category=providers.",
+      "properties": {
+        "certified": { "type": "boolean" },
+        "checkedAt": { "type": "string", "format": "date-time" },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "passed"],
+            "properties": {
+              "name": { "type": "string" },
+              "passed": { "type": "boolean" },
+              "detail": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

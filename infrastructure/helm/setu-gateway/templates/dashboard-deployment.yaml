@@ -1,0 +1,46 @@
+{{- if .Values.dashboard.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "setu-gateway.dashboardName" . }}
+  labels:
+    {{- include "setu-gateway.labels" . | nindent 4 }}
+    {{- include "setu-gateway.dashboardSelectorLabels" . | nindent 4 }}
+spec:
+  {{- if not .Values.dashboard.autoscaling.enabled }}
+  replicas: {{ .Values.dashboard.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "setu-gateway.dashboardSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "setu-gateway.dashboardSelectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: dashboard
+          image: "{{ .Values.dashboard.image.repository }}:{{ .Values.dashboard.image.tag }}"
+          imagePullPolicy: {{ .Values.dashboard.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.dashboard.service.port }}
+          env:
+            # nginx proxies /api/* here server-side (infrastructure/docker/nginx.dashboard.conf.template) -
+            # this is the in-cluster Service address, not what a browser would use.
+            - name: GATEWAY_URL
+              value: "http://{{ include "setu-gateway.gatewayName" . }}:{{ .Values.gateway.service.port }}"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.dashboard.service.port }}
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.dashboard.service.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          resources:
+            {{- toYaml .Values.dashboard.resources | nindent 12 }}
+{{- end }}

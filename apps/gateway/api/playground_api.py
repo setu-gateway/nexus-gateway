@@ -1,14 +1,21 @@
 import time
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
-from apps.gateway.providers.instance import model_registry, provider_registry
+from apps.gateway.providers.instance import model_registry, provider_registry, rate_limiter
 from packages.plugin_sdk import ChatRequest
 
 router = APIRouter(prefix="/playground", tags=["Provider Playground"])
+
+# The playground has no auth (Epic 7.2: it's meant to be safe to expose publicly as
+# a try-before-you-integrate demo) - the only thing standing between it and being an
+# unmetered free proxy to real, billed provider API keys is a per-IP limit here.
+# Deliberately tighter than any per-project limit in apps/gateway/ratelimit's rules,
+# since this traffic isn't attributable to any paying customer/project.
+PLAYGROUND_RATE_LIMIT_PER_MINUTE = 10
 
 
 class PlaygroundRequest(BaseModel):
@@ -28,8 +35,23 @@ class PlaygroundResponse(BaseModel):
 
 
 @router.post("/completion", response_model=PlaygroundResponse)
-async def run_playground_completion(req: PlaygroundRequest) -> PlaygroundResponse:
+async def run_playground_completion(req: PlaygroundRequest, request: Request) -> PlaygroundResponse:
     """Execute prompt against selected provider & model, returning raw response, latency, and token usage."""
+    client_ip = request.client.host if request.client else "unknown"
+    limit_result = await rate_limiter.check(
+        scope_type="playground_ip",
+        scope_value=client_ip,
+        limit=PLAYGROUND_RATE_LIMIT_PER_MINUTE,
+        window_seconds=60,
+        algorithm="sliding_window",
+    )
+    if not limit_result.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Playground rate limit exceeded ({PLAYGROUND_RATE_LIMIT_PER_MINUTE}/minute per IP). "
+            f"Retry in {limit_result.retry_after_seconds:.0f}s, or use a real API key for sustained use.",
+        )
+
     if req.provider:
         provider_name = req.provider.lower()
         upstream_model = req.model

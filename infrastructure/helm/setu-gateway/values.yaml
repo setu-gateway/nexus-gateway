@@ -1,0 +1,104 @@
+# Default values for setu-gateway. This chart assumes externally-managed PostgreSQL
+# and Redis (a managed service, or your own cluster's database operator/Helm chart) -
+# it does not stand these up itself, matching the plain-manifest posture already
+# documented in infrastructure/kubernetes/README.md. Supply their connection strings
+# via secrets.data (or secrets.existingSecret, see below).
+
+gateway:
+  image:
+    repository: setu-gateway
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 2
+  service:
+    port: 8000
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+  env:
+    serviceName: gateway
+    environment: production
+    logLevel: INFO
+    jwtAlgorithm: HS256
+    accessTokenExpireMinutes: 15
+    refreshTokenExpireDays: 30
+    dbPoolSize: 20
+    dbMaxOverflow: 30
+    dbPoolTimeoutSeconds: 30
+
+dashboard:
+  enabled: true
+  image:
+    repository: setu-dashboard
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 2
+  service:
+    port: 3000
+  resources:
+    requests:
+      cpu: 100m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 128Mi
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+
+# Secrets: DATABASE_URL, REDIS_URL, JWT_SECRET, and provider API keys. Either supply
+# `data` (rendered into a chart-managed Secret - fine for a first deploy, but prefer
+# a real secrets manager for production) or set `existingSecret` to the name of a
+# Secret you manage out-of-band (e.g. via External Secrets Operator, Sealed Secrets,
+# or `kubectl create secret` from your own pipeline) - when set, this chart creates
+# no Secret of its own and just references yours.
+secrets:
+  existingSecret: ""
+  data:
+    DATABASE_URL: ""
+    REDIS_URL: ""
+    JWT_SECRET: ""
+    OPENAI_API_KEY: ""
+    ANTHROPIC_API_KEY: ""
+    GEMINI_API_KEY: ""
+    GROQ_API_KEY: ""
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: setu-gateway.example.com
+  tls:
+    enabled: false
+    secretName: ""
+
+monitoring:
+  # Requires the Prometheus Operator CRDs installed in-cluster. NOTE: the gateway
+  # does not yet export a Prometheus-format /metrics endpoint (tracked on the
+  # roadmap) - this ServiceMonitor is real, correct YAML that will start scraping
+  # successfully once that lands, but scraping it today will just find nothing at
+  # this path. Left disabled by default for exactly that reason.
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    path: /metrics
+
+persistence:
+  # The gateway itself is stateless (state lives in Postgres/Redis) - this is off by
+  # default and only needed for a custom use case that writes to local disk (e.g. a
+  # mounted plugin bundle). Enabling it adds a PVC + volume mount at `mountPath`.
+  enabled: false
+  size: 1Gi
+  storageClassName: ""
+  mountPath: /data

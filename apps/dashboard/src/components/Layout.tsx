@@ -3,6 +3,7 @@ import { logout, useCurrentUser } from "../lib/auth";
 
 const NAV_ITEMS = [
   { to: "/", label: "Overview", end: true },
+  { to: "/studio", label: "Studio" },
   { to: "/providers", label: "Providers" },
   { to: "/models", label: "Models" },
   { to: "/requests", label: "Requests" },
@@ -11,6 +12,7 @@ const NAV_ITEMS = [
   { to: "/organizations", label: "Organizations" },
   { to: "/projects", label: "Projects" },
   { to: "/api-keys", label: "API Keys" },
+  { to: "/community", label: "Community" },
 ];
 
 export function Layout() {

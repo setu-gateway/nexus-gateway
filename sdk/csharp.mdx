@@ -1,0 +1,44 @@
+---
+title: "C# SDK"
+description: "Integration guide for .NET applications."
+---
+
+Source: `packages/sdk-csharp`, NuGet package `SetuGateway` (.NET 8+).
+
+## Install
+
+```bash
+dotnet add package SetuGateway
+```
+
+## Usage
+
+```csharp
+using var client = new SetuClient(apiKey: "sk_setu_...");
+var resp = await client.Chat.Completions.CreateAsync(new ChatCompletionRequest(
+    "gpt-4o", new List<Message> { new("user", "hi") }));
+```
+
+The constructor reads `SETU_BASE_URL` (defaults to `http://localhost:8000`) and `SETU_API_KEY` from the environment by default; pass `baseUrl`/`apiKey` explicitly to override.
+
+## Embeddings and models
+
+```csharp
+await client.Embeddings.CreateAsync(new EmbeddingRequest("text-embedding-3-small", "hello world"));
+await client.Models.ListAsync();
+```
+
+## Errors
+
+Non-2xx responses and connection failures raise typed exceptions - see `packages/sdk-csharp/Exceptions.cs`.
+
+## Not yet supported
+
+Streaming (`stream: true`) isn't implemented in this SDK yet - use the [Python](/sdk/python) or [TypeScript](/sdk/typescript) SDK if you need server-sent-event streaming today.
+
+## Verify
+
+```bash
+dotnet build
+dotnet test
+```

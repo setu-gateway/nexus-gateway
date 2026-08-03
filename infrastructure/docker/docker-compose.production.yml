@@ -1,0 +1,31 @@
+# Production overlay - adds a Caddy reverse proxy in front of the gateway and
+# dashboard for automatic HTTPS. Layer this on top of the base compose file rather
+# than editing it directly, so local development (docker compose up, no domain, no
+# TLS) keeps working unchanged:
+#
+#   docker compose -f docker-compose.yml -f infrastructure/docker/docker-compose.production.yml up -d
+#
+# Before running this, see DEPLOYMENT_RUNBOOK.md - it needs a real domain pointed at
+# this host (DNS) and ports 80/443 open, neither of which this file can do for you.
+services:
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Relative paths in an override resolve against the *project* directory, which
+      # docker compose takes from the first -f file (docker-compose.yml at the repo
+      # root, per the invocation above) - not this override file's own directory.
+      # Hence the full infrastructure/docker/ prefix rather than a bare ./Caddyfile.
+      - ./infrastructure/docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - gateway
+      - dashboard
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

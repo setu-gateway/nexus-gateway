@@ -1,7 +1,7 @@
 import random
 
 import pytest
-from conftest import register_and_login
+from conftest import register_and_login, retry_on_lock
 from fastapi.testclient import TestClient
 
 from apps.gateway.main import app
@@ -16,6 +16,7 @@ from apps.gateway.routing.rules import (
     evaluate_rules,
     parse_condition,
 )
+from apps.gateway.utils import drain_background_tasks
 
 client = TestClient(app)
 
@@ -171,7 +172,7 @@ def test_rule_naming_disabled_provider_degrades_to_policy_ranking():
 # --- CRUD API -------------------------------------------------------------------------
 
 
-def test_routing_rules_crud_lifecycle():
+async def test_routing_rules_crud_lifecycle():
     org_id, headers = register_and_login(client)
 
     create_resp = client.post(
@@ -203,7 +204,12 @@ def test_routing_rules_crud_lifecycle():
     assert patch_resp.json()["enabled"] is False
     assert patch_resp.json()["priority"] == 5
 
-    delete_resp = client.delete(f"/routing-rules/{rule_id}", headers=headers)
+    # See the identical comment in tests/test_policy_engine.py::test_policy_crud_lifecycle -
+    # same race (a still-in-flight audit-log fire_and_forget write from the patch above
+    # colliding with the delete below under SQLite's shared-cache test database), same fix.
+    await drain_background_tasks()
+
+    delete_resp = await retry_on_lock(lambda: client.delete(f"/routing-rules/{rule_id}", headers=headers))
     assert delete_resp.status_code == 200
 
     assert client.get(f"/routing-rules/{rule_id}", headers=headers).status_code == 404

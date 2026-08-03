@@ -1,0 +1,15 @@
+{{- if .Values.dashboard.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "setu-gateway.dashboardName" . }}
+  labels:
+    {{- include "setu-gateway.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "setu-gateway.dashboardSelectorLabels" . | nindent 4 }}
+  ports:
+    - port: {{ .Values.dashboard.service.port }}
+      targetPort: {{ .Values.dashboard.service.port }}
+  type: ClusterIP
+{{- end }}

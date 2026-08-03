@@ -28,7 +28,7 @@ class ModelDefinition(BaseModel):
         default=0.0, ge=0.0, description="Approximate USD cost per 1K output tokens (0 for self-hosted/free models)"
     )
 
-    def estimate_cost(self, input_tokens: int, output_tokens: int = 0) -> float:
+    def estimate_cost(self, input_tokens: float, output_tokens: float = 0) -> float:
         """Estimate request cost in USD from token counts. Pricing is illustrative and
         should be kept in sync with each provider's published pricing page."""
         return round(

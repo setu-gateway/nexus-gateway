@@ -1,0 +1,47 @@
+---
+title: "AI Traffic Replay"
+description: "Re-run a batch of historical requests against a candidate provider before switching to it"
+---
+
+Batch version of [Time Machine](/features/time-machine)'s single-record replay: re-runs a whole window of historical requests - e.g. "yesterday's traffic" - against a candidate provider, and reports aggregate success rate, latency, and response similarity. Built specifically to answer "if I switched to this provider/model, what would have happened to my real traffic," before actually committing to the switch.
+
+```bash
+curl -X POST http://localhost:8000/time-machine/replay-batch \
+  -H "Content-Type: application/json" \
+  -d '{
+    "organization_id": "...",
+    "target_provider": "gemini",
+    "since": "2026-08-02T00:00:00Z",
+    "until": "2026-08-03T00:00:00Z",
+    "limit": 50
+  }'
+```
+
+`since`/`until`/`project_id` are all optional filters on top of `organization_id` (required) and `target_provider` (required); `limit` defaults to 50.
+
+## Requirement: the traffic must already be recorded
+
+This only replays requests that already have a [Time Machine](/features/time-machine) record - which only happens for requests sent with `X-Setu-Time-Machine: true`. A window with no opted-in traffic returns an empty, zeroed-out report, not an error. Traffic Replay doesn't record anything new itself; it's purely a batch consumer of records Time Machine already captured.
+
+## Response shape
+
+```json
+{
+  "target_provider": "gemini",
+  "records_replayed": 50,
+  "successful": 48,
+  "failed": 2,
+  "avg_diff_ratio": 0.87,
+  "avg_original_latency_ms": 412.6,
+  "avg_replayed_latency_ms": 298.1,
+  "results": [
+    {"request_id": "...", "original_provider": "openai", "success": true, "diff_ratio": 0.91, "original_latency_ms": 405.2, "replayed_latency_ms": 287.9, "error": null}
+  ]
+}
+```
+
+`avg_diff_ratio` averages each record's [`difflib.SequenceMatcher`](https://docs.python.org/3/library/difflib.html) similarity between the original and replayed response text - a rough proxy for "how differently did the candidate provider answer the same prompt," not a semantic/quality judgment. `avg_replayed_latency_ms` is averaged only over the successful replays, so a provider that fails most requests doesn't get an artificially flattering latency number from its few fast successes.
+
+## Performance note
+
+Every record in the batch is replayed concurrently (`asyncio.gather`), not one at a time - a 50-record batch takes roughly as long as one record's own latency, not 50x it. Replay calls are live calls to the target provider; they aren't served from cache and aren't recorded to analytics (`request_logs`), so running a replay batch doesn't skew your usage numbers or get artificially sped up by a cache hit.

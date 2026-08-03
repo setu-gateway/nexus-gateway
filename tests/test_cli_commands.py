@@ -221,6 +221,29 @@ def test_cli_parser_cache_clear_with_project_id():
     assert args.project_id == "proj-1"
 
 
+def test_cli_parser_certify_with_and_without_provider():
+    parser = _build_parser()
+    assert parser.parse_args(["certify"]).provider is None
+    assert parser.parse_args(["certify", "openai"]).provider == "openai"
+
+
+def test_main_certify_lists_providers_when_none_given(capsys):
+    assert main(["certify"]) == 0
+    out = capsys.readouterr().out
+    assert "openai" in out
+    assert "ollama" in out
+
+
+def test_main_certify_openai_end_to_end_exits_zero(capsys):
+    assert main(["certify", "openai"]) == 0
+    out = capsys.readouterr().out
+    assert "CERTIFIED" in out
+
+
+def test_main_certify_unknown_provider_exits_nonzero(capsys):
+    assert main(["certify", "not-a-real-provider"]) == 1
+
+
 def test_cli_parser_replay_options():
     parser = _build_parser()
     args = parser.parse_args(["replay", "--model", "gpt-4o", "--prompt", "hi"])

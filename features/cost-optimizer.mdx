@@ -1,0 +1,38 @@
+---
+title: "AI Cost Optimizer"
+description: "Cheaper-model recommendations based on an organization's actual recorded usage"
+---
+
+Recommends cheaper models by analyzing an organization's own `request_logs` - actual usage, not a generic price list - and looking for a same-or-lower-tier model elsewhere in the [model catalog](/features/routing) that would have cost less for the same average token volume.
+
+```bash
+curl "http://localhost:8000/optimizer/recommendations?organization_id=..."
+curl "http://localhost:8000/optimizer/recommendations?organization_id=...&since=2026-07-01T00:00:00Z&until=2026-08-01T00:00:00Z"
+```
+
+## How a recommendation is built
+
+For each `(provider, model)` pair the organization actually called in the window, the optimizer computes the average input/output token counts from real requests, then checks every other model in the catalog for one that: is the same tier or one tier down, and would cost less for that same average token split (via each model's `estimate_cost(input_tokens, output_tokens)`). Only the *cheapest* qualifying candidate is returned per model actually in use - not every theoretically-cheaper option.
+
+## Response shape
+
+```json
+{
+  "current_model": "gpt-4o",
+  "current_provider": "openai",
+  "current_tier": "flagship",
+  "recommended_model": "gpt-4o-mini",
+  "recommended_provider": "openai",
+  "recommended_tier": "efficient",
+  "estimated_savings_pct": 82.4,
+  "projected_savings_usd": 12.37,
+  "based_on_requests": 214,
+  "trade_off": "..."
+}
+```
+
+`based_on_requests` is the number of real requests the average was computed from - a recommendation based on 3 requests is far less reliable than one based on 2,000, and the field is returned specifically so a caller can weigh that rather than treating every recommendation as equally confident. `trade_off` is a short, fixed, human-readable note about what a tier step-down generally costs in quality (not benchmarked per-request).
+
+## What this doesn't do
+
+It doesn't automatically switch your traffic to the recommended model - this is a read-only analysis endpoint. Acting on a recommendation means changing your own routing configuration or `model` parameter; nothing here rewrites [routing rules](/features/routing) for you. It also can't know whether a cheaper model actually performs acceptably for your specific prompts - use [Traffic Replay](/features/traffic-replay) to test a candidate against your own historical requests before committing to a switch.

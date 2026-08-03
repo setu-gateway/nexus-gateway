@@ -129,6 +129,57 @@ export interface ApiKey {
   created_at: string;
 }
 
+export interface RoutingRule {
+  id: string;
+  organization_id: string;
+  name: string;
+  condition_expression: string;
+  action_type: "fallback" | "use" | "reject";
+  action_provider: string | null;
+  priority: number;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RoutingRuleCreate {
+  organization_id: string;
+  name: string;
+  condition_expression: string;
+  action_type: "fallback" | "use" | "reject";
+  action_provider?: string;
+  priority?: number;
+  enabled?: boolean;
+}
+
+export type RoutingPolicy =
+  | "lowest_latency"
+  | "lowest_cost"
+  | "highest_availability"
+  | "user_preference"
+  | "round_robin"
+  | "weighted"
+  | "capability_based";
+
+export interface SimulationOutcome {
+  policy: string;
+  sample_size: number;
+  provider_distribution: Record<string, number>;
+  fallback_rate: number;
+  avg_estimated_cost: number;
+  avg_latency_ms: number;
+  sample_models: string[];
+}
+
+export interface ReplayResult {
+  provider: string;
+  upstream_model: string;
+  success: boolean;
+  latency_ms: number;
+  response: Record<string, unknown> | null;
+  error: string | null;
+}
+
 export const api = {
   analyticsSummary: () => request<AnalyticsSummary>("/analytics/summary"),
   requestLogs: (params: { status?: string; provider?: string; organization_id?: string } = {}) => {
@@ -142,4 +193,20 @@ export const api = {
   projects: (organizationId?: string) =>
     request<Project[]>(`/projects${organizationId ? `?organization_id=${organizationId}` : ""}`),
   apiKeys: (projectId?: string) => request<ApiKey[]>(`/keys${projectId ? `?project_id=${projectId}` : ""}`),
+  routingRules: (organizationId: string) => request<RoutingRule[]>(`/routing-rules?organization_id=${organizationId}`),
+  createRoutingRule: (body: RoutingRuleCreate) =>
+    request<RoutingRule>("/routing-rules", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+  deleteRoutingRule: (id: string) => request<{ message: string }>(`/routing-rules/${id}`, { method: "DELETE" }),
+  simulateRoutingPolicy: (body: { policy: RoutingPolicy; organization_id?: string; models?: string[] }) =>
+    request<SimulationOutcome>("/routing/simulate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  replayPrompt: (body: { messages: { role: string; content: string }[]; providers?: string[]; model?: string }) =>
+    request<{ results: ReplayResult[] }>("/routing/replay", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
 };

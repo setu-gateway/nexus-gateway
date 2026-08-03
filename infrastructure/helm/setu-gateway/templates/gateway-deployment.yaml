@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "setu-gateway.gatewayName" . }}
+  labels:
+    {{- include "setu-gateway.labels" . | nindent 4 }}
+    {{- include "setu-gateway.gatewaySelectorLabels" . | nindent 4 }}
+spec:
+  {{- if not .Values.gateway.autoscaling.enabled }}
+  replicas: {{ .Values.gateway.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "setu-gateway.gatewaySelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "setu-gateway.gatewaySelectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: gateway
+          image: "{{ .Values.gateway.image.repository }}:{{ .Values.gateway.image.tag }}"
+          imagePullPolicy: {{ .Values.gateway.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.gateway.service.port }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "setu-gateway.gatewayName" . }}-config
+            - secretRef:
+                name: {{ include "setu-gateway.secretName" . }}
+          # /live only confirms the process is up; /ready checks DB + Redis
+          # connectivity (apps/gateway/api/health.py) - using /live for both would
+          # mask a pod that's running but can't reach its dependencies.
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: {{ .Values.gateway.service.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /live
+              port: {{ .Values.gateway.service.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            {{- toYaml .Values.gateway.resources | nindent 12 }}
+          {{- if .Values.persistence.enabled }}
+          volumeMounts:
+            - name: data
+              mountPath: {{ .Values.persistence.mountPath }}
+          {{- end }}
+      {{- if .Values.persistence.enabled }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "setu-gateway.gatewayName" . }}-data
+      {{- end }}

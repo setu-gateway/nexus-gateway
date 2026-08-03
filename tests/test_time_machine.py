@@ -107,3 +107,51 @@ def test_time_machine_streaming_request_is_captured():
     assert kwargs["request_messages"] == payload["messages"]
     assert kwargs["provider"] == "openai"
     assert kwargs["requested_model"] == "gpt-4o"
+
+
+# --- AI Traffic Replay (bulk replay-batch) ---------------------------------------------
+
+
+def test_replay_batch_reports_aggregate_stats_across_matching_records():
+    org_id, headers = register_and_login(client)
+    for i in range(3):
+        client.post(
+            "/v1/chat/completions",
+            json={"model": "gpt-4o", "messages": [{"role": "user", "content": f"batch replay {i}"}]},
+            headers={"X-Setu-Organization-Id": org_id, "X-Setu-Time-Machine": "true"},
+        )
+
+    report = client.post(
+        "/time-machine/replay-batch",
+        json={"organization_id": org_id, "target_provider": "gemini"},
+        headers=headers,
+    ).json()
+
+    assert report["target_provider"] == "gemini"
+    assert report["records_replayed"] == 3
+    assert report["successful"] + report["failed"] == 3
+    assert len(report["results"]) == 3
+    assert all(r["original_provider"] == "openai" for r in report["results"])
+    assert report["avg_original_latency_ms"] >= 0
+
+
+def test_replay_batch_empty_window_returns_zero_records_not_an_error():
+    org_id, headers = register_and_login(client)
+    report = client.post(
+        "/time-machine/replay-batch",
+        json={"organization_id": org_id, "target_provider": "gemini", "since": "2099-01-01T00:00:00Z"},
+        headers=headers,
+    ).json()
+    assert report["records_replayed"] == 0
+    assert report["results"] == []
+
+
+def test_replay_batch_for_another_organization_is_forbidden():
+    _org_id, headers = register_and_login(client)
+    other_org_id, _ = register_and_login(client)
+    resp = client.post(
+        "/time-machine/replay-batch",
+        json={"organization_id": other_org_id, "target_provider": "gemini"},
+        headers=headers,
+    )
+    assert resp.status_code == 403

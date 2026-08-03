@@ -42,3 +42,92 @@ jobs:
       # high+ only: a moderate react-router advisory is already tracked separately
       # (v6->v7 is a deliberate, non-trivial migration, not a quick patch bump).
       - run: pnpm audit --audit-level high
+
+  go-security:
+    name: Go Dependency Security (SDK, Terraform provider, K8s operator)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+      - run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - name: govulncheck (setu-gateway-go)
+        working-directory: packages/sdk-go
+        run: govulncheck ./...
+      - name: govulncheck (terraform-provider-setu)
+        working-directory: infrastructure/terraform-provider-setu
+        run: govulncheck ./...
+      - name: govulncheck (setu-gateway-operator)
+        working-directory: infrastructure/k8s-operator
+        run: govulncheck ./...
+
+  rust-security:
+    name: Rust Dependency Security (SDK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo install cargo-audit
+      - name: cargo audit
+        working-directory: packages/sdk-rust
+        run: cargo audit
+
+  dotnet-security:
+    name: .NET Dependency Security (SDK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - working-directory: packages/sdk-csharp
+        run: dotnet restore
+      # `dotnet list package --vulnerable` always exits 0 - it's a reporting
+      # command, not a gate - so grep its own output for the phrase it prints when
+      # it actually finds something, and fail the step ourselves when it does.
+      - name: Check for vulnerable NuGet packages
+        working-directory: packages/sdk-csharp
+        run: |
+          set -o pipefail
+          dotnet list package --vulnerable --include-transitive 2>&1 | tee vuln-report.txt
+          if grep -q "has the following vulnerable packages" vuln-report.txt; then
+            echo "::error::Vulnerable NuGet package(s) found - see output above."
+            exit 1
+          fi
+
+  java-security:
+    name: Java Dependency Security (SDK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+      # Requires an NVD_API_KEY repo secret for reliable results - register free at
+      # https://nvd.nist.gov/developers/request-an-api-key. Without it, the NVD
+      # data sync gets rate-limited and the plugin falls back to local/cached data
+      # (verified locally: it logs the failure but still exits successfully rather
+      # than blocking on missing data, which is why this isn't wired to fail CI
+      # outright when the key is absent - it would otherwise permanently red the
+      # build for every fork/contributor that hasn't set up their own key).
+      - name: OWASP dependency-check
+        working-directory: packages/sdk-java
+        run: mvn org.owasp:dependency-check-maven:check -DnvdApiKey="${{ secrets.NVD_API_KEY }}"
+
+  dependency-review:
+    name: Dependency Review (PR diff, all ecosystems)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # GitHub's own dependency graph covers go.mod/Cargo.lock/pom.xml/.csproj
+      # natively - zero setup, but only meaningful on a PR diff (base vs head),
+      # which is why this is a separate job from the four above rather than a
+      # replacement for them: this catches "this PR adds a known-vulnerable
+      # dependency" immediately; the per-language jobs catch drift on main and on
+      # the weekly schedule, when there's no PR diff for this action to compare.
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high

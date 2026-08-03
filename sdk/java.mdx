@@ -1,0 +1,50 @@
+---
+title: "Java SDK"
+description: "Integration guide for Java applications."
+---
+
+Source: `packages/sdk-java`, Maven artifact `io.setugateway:setu-gateway-sdk` (Java 11+).
+
+## Install
+
+```xml
+<dependency>
+  <groupId>io.setugateway</groupId>
+  <artifactId>setu-gateway-sdk</artifactId>
+  <version>1.0.0</version>
+</dependency>
+```
+
+## Usage
+
+```java
+SetuClient client = new SetuClient.Builder().apiKey("sk_setu_...").build();
+JsonNode resp = client.chat().completions().create(
+    new ChatCompletionRequest("gpt-4o", List.of(new Message("user", "hi"))));
+```
+
+`Builder()` reads `$SETU_BASE_URL` (defaults to `http://localhost:8000`) and `$SETU_API_KEY` from the environment by default; `.baseUrl(...)` / `.apiKey(...)` override either explicitly.
+
+## Embeddings
+
+```java
+client.embeddings().create(new EmbeddingRequest("text-embedding-3-small", "hello world"));
+```
+
+## Errors
+
+`SetuApiException` is thrown for non-2xx responses; `SetuConnectionException` is thrown when the gateway can't be reached at all.
+
+## A deliberate HTTP/1.1 pin
+
+The client uses `java.net.http.HttpClient` pinned to `HttpClient.Version.HTTP_1_1`. The JDK client's default HTTP/2 preference attempts an `h2c` upgrade handshake first, which a plain-HTTP uvicorn server (what the gateway runs on) doesn't understand - without the pin, this surfaces as a confusing raw `"Invalid HTTP request received"` from the server instead of a normal HTTP error.
+
+## Not yet supported
+
+Streaming (`stream: true`) isn't implemented in this SDK yet - use the [Python](/sdk/python) or [TypeScript](/sdk/typescript) SDK if you need server-sent-event streaming today.
+
+## Verify
+
+```bash
+mvn test
+```

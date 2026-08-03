@@ -32,7 +32,10 @@
         "pages": [
           "deployment/docker",
           "deployment/kubernetes",
-          "deployment/configuration"
+          "deployment/configuration",
+          "deployment/terraform",
+          "deployment/helm",
+          "deployment/kubernetes-operator"
         ]
       },
       {
@@ -43,7 +46,10 @@
           "features/time-machine",
           "features/webhooks",
           "features/rate-limiting",
-          "features/analytics"
+          "features/analytics",
+          "features/policy-engine",
+          "features/cost-optimizer",
+          "features/traffic-replay"
         ]
       },
       {
@@ -60,7 +66,9 @@
         "group": "Plugins",
         "pages": [
           "plugins/overview",
-          "plugins/creating-plugins"
+          "plugins/creating-plugins",
+          "plugins/marketplace",
+          "plugins/provider-certification"
         ]
       },
       {
@@ -74,7 +82,11 @@
         "group": "SDKs",
         "pages": [
           "sdk/python",
-          "sdk/typescript"
+          "sdk/typescript",
+          "sdk/go",
+          "sdk/rust",
+          "sdk/java",
+          "sdk/csharp"
         ]
       },
       {

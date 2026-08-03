@@ -15,8 +15,10 @@ from apps.gateway.api.keys import router as api_key_router
 from apps.gateway.api.mcp import router as mcp_router
 from apps.gateway.api.models_api import router as unified_models_router
 from apps.gateway.api.openai_v1 import router as openai_v1_router
+from apps.gateway.api.optimizer_api import router as optimizer_router
 from apps.gateway.api.organizations import router as organization_router
 from apps.gateway.api.playground_api import router as playground_router
+from apps.gateway.api.policies import router as policies_router
 from apps.gateway.api.projects import router as project_router
 from apps.gateway.api.prompt_templates import router as prompt_templates_router
 from apps.gateway.api.providers_api import router as providers_management_router
@@ -77,6 +79,8 @@ app.include_router(evaluation_router)
 app.include_router(prompt_templates_router)
 app.include_router(comparisons_router)
 app.include_router(mcp_router)
+app.include_router(policies_router)
+app.include_router(optimizer_router)
 
 
 def start():

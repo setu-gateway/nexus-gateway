@@ -1,0 +1,42 @@
+# Example reverse proxy for exposing the gateway (playground included) and the
+# dashboard publicly, with automatic HTTPS (Caddy requests and renews a Let's
+# Encrypt certificate for every domain listed below the first time it starts, as
+# long as DNS already points here and ports 80/443 are reachable - no certbot, no
+# manual renewal). Copy this file to `Caddyfile`, replace both domains with your
+# own, and see DEPLOYMENT_RUNBOOK.md for the rest of the steps this depends on
+# (DNS records, opening 80/443, and the docker-compose wiring for this container).
+#
+# This is one option among several - any reverse proxy or your cloud provider's own
+# load balancer/ingress works the same way; Caddy is used here because its config
+# for "just get me HTTPS" is a few lines instead of a certbot cron job.
+
+playground.your-domain.com {
+	# The playground route itself is already rate-limited server-side (10 requests
+	# per minute per IP - see features/... /playground in the docs and
+	# apps/gateway/api/playground_api.py) specifically so it's safe to put behind a
+	# public domain like this without additional application changes.
+	reverse_proxy gateway:8000
+
+	encode gzip
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+}
+
+app.your-domain.com {
+	# The dashboard requires real authentication (dashboard login, JWT-based) for
+	# every management action - see api/authentication in the docs - so exposing it
+	# publicly doesn't hand out admin access by itself. Still put it behind your own
+	# network/VPN instead if you'd rather not expose it at all; nothing requires it
+	# to be public for the gateway or playground to work.
+	reverse_proxy dashboard:3000
+
+	encode gzip
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+}

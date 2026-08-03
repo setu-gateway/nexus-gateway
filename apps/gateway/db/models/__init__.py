@@ -5,6 +5,7 @@ from apps.gateway.db.models.comparison import ComparisonResult, ComparisonRun
 from apps.gateway.db.models.evaluation import EvalCase, EvalResult, EvalRun, EvalSuite
 from apps.gateway.db.models.mcp_server import MCPServer
 from apps.gateway.db.models.organization import Organization
+from apps.gateway.db.models.policy import Policy
 from apps.gateway.db.models.project import Project
 from apps.gateway.db.models.prompt_template import PromptTemplate, PromptTemplateVersion
 from apps.gateway.db.models.provider_config import ProviderConfigModel
@@ -41,4 +42,5 @@ __all__ = [
     "ComparisonRun",
     "ComparisonResult",
     "MCPServer",
+    "Policy",
 ]

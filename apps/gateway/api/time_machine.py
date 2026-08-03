@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from datetime import datetime
 from difflib import SequenceMatcher
@@ -120,19 +121,8 @@ async def get_time_machine_record(
     return _to_response(await _get_record_or_404(request_id, db, user))
 
 
-@router.post("/{request_id}/replay", response_model=TimeMachineReplayResponse)
-async def replay_time_machine_record(
-    request_id: str,
-    provider: str | None = Query(default=None, description="Replay against a different provider; defaults to the original"),
-    db: AsyncSession = Depends(get_db_session),
-    user: DashboardUserContext = Depends(resolve_dashboard_user_or_401),
-) -> TimeMachineReplayResponse:
-    """Debugging, regression testing, prompt engineering (Epic 5.2): re-run a stored
-    request - by default against the same provider, to check for drift over time, or
-    against a different one to compare - and diff the two responses."""
-    record = await _get_record_or_404(request_id, db, user)
-
-    target_provider = (provider or record.provider).lower()
+async def _replay_one(record: TimeMachineRecord, target_provider: str) -> TimeMachineReplayResponse:
+    target_provider = target_provider.lower()
     if target_provider == record.provider:
         target_upstream_model = record.upstream_model
     else:
@@ -155,7 +145,7 @@ async def replay_time_machine_record(
     matcher = SequenceMatcher(None, original_text, replayed_text)
 
     return TimeMachineReplayResponse(
-        request_id=request_id,
+        request_id=record.request_id,
         original=ReplayResultView(
             provider=record.provider,
             upstream_model=record.upstream_model,
@@ -174,6 +164,114 @@ async def replay_time_machine_record(
         ),
         diff_ratio=round(matcher.ratio(), 4),
         diff=_unified_diff_lines(original_text, replayed_text),
+    )
+
+
+@router.post("/{request_id}/replay", response_model=TimeMachineReplayResponse)
+async def replay_time_machine_record(
+    request_id: str,
+    provider: str | None = Query(default=None, description="Replay against a different provider; defaults to the original"),
+    db: AsyncSession = Depends(get_db_session),
+    user: DashboardUserContext = Depends(resolve_dashboard_user_or_401),
+) -> TimeMachineReplayResponse:
+    """Debugging, regression testing, prompt engineering (Epic 5.2): re-run a stored
+    request - by default against the same provider, to check for drift over time, or
+    against a different one to compare - and diff the two responses."""
+    record = await _get_record_or_404(request_id, db, user)
+    return await _replay_one(record, provider or record.provider)
+
+
+class TrafficReplayRequest(BaseModel):
+    organization_id: str
+    target_provider: str
+    project_id: str | None = None
+    since: datetime | None = None
+    until: datetime | None = None
+    limit: int = 50
+
+
+class TrafficReplaySummary(BaseModel):
+    request_id: str
+    original_provider: str
+    success: bool
+    diff_ratio: float
+    original_latency_ms: float
+    replayed_latency_ms: float
+    error: str | None
+
+
+class TrafficReplayReport(BaseModel):
+    target_provider: str
+    records_replayed: int
+    successful: int
+    failed: int
+    avg_diff_ratio: float
+    avg_original_latency_ms: float
+    avg_replayed_latency_ms: float
+    results: list[TrafficReplaySummary]
+
+
+@router.post("/replay-batch", response_model=TrafficReplayReport)
+async def replay_traffic_batch(
+    req: TrafficReplayRequest,
+    db: AsyncSession = Depends(get_db_session),
+    user: DashboardUserContext = Depends(resolve_dashboard_user_or_401),
+) -> TrafficReplayReport:
+    """AI Traffic Replay: re-run a batch of historical requests - e.g. "yesterday's
+    traffic" via since/until - against a candidate provider, and report aggregate
+    success rate, latency, and response-similarity, so a provider switch can be
+    evaluated against real prior traffic before committing to it. Builds on the
+    same single-record replay (`_replay_one`) used by /time-machine/{id}/replay -
+    this is that same mechanism run across many records with a summary on top,
+    not a separate replay engine."""
+    if not user.owns_organization(req.organization_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot replay traffic for another organization")
+
+    query = (
+        select(TimeMachineRecord)
+        .where(TimeMachineRecord.organization_id == uuid.UUID(req.organization_id))
+        .order_by(TimeMachineRecord.created_at.desc())
+        .limit(req.limit)
+    )
+    if req.project_id:
+        query = query.where(TimeMachineRecord.project_id == uuid.UUID(req.project_id))
+    if req.since:
+        query = query.where(TimeMachineRecord.created_at >= req.since)
+    if req.until:
+        query = query.where(TimeMachineRecord.created_at <= req.until)
+
+    records = (await db.execute(query)).scalars().all()
+
+    # Concurrent, not sequential: _replay_one's own candidate calls inside it are
+    # already concurrent (see replay_request in routing/replay.py) - awaiting each
+    # record one at a time here would make a 50-record batch take ~50x one record's
+    # latency instead of ~1x, which defeats the point of a *batch* replay tool.
+    outcomes = await asyncio.gather(*(_replay_one(record, req.target_provider) for record in records))
+    summaries = [
+        TrafficReplaySummary(
+            request_id=outcome.request_id,
+            original_provider=outcome.original.provider,
+            success=outcome.replayed.success,
+            diff_ratio=outcome.diff_ratio,
+            original_latency_ms=outcome.original.latency_ms,
+            replayed_latency_ms=outcome.replayed.latency_ms,
+            error=outcome.replayed.error,
+        )
+        for outcome in outcomes
+    ]
+
+    successful = [s for s in summaries if s.success]
+    count = len(summaries) or 1  # avoid division by zero when the window matched nothing
+
+    return TrafficReplayReport(
+        target_provider=req.target_provider.lower(),
+        records_replayed=len(summaries),
+        successful=len(successful),
+        failed=len(summaries) - len(successful),
+        avg_diff_ratio=round(sum(s.diff_ratio for s in summaries) / count, 4),
+        avg_original_latency_ms=round(sum(s.original_latency_ms for s in summaries) / count, 2),
+        avg_replayed_latency_ms=round(sum(s.replayed_latency_ms for s in successful) / (len(successful) or 1), 2),
+        results=summaries,
     )
 
 

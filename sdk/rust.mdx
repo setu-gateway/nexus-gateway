@@ -1,0 +1,46 @@
+---
+title: "Rust SDK"
+description: "Integration guide for Rust applications."
+---
+
+Source: `packages/sdk-rust`, crate `setu-gateway` (built on `reqwest`).
+
+## Install
+
+```bash
+cargo add setu-gateway
+```
+
+## Usage
+
+```rust
+let client = setu_gateway::Client::new().with_api_key("sk_setu_...");
+let resp = client.chat().completions().create(setu_gateway::ChatCompletionRequest {
+    model: "gpt-4o".into(),
+    messages: vec![setu_gateway::Message { role: "user".into(), content: "hi".into() }],
+    temperature: None,
+    top_p: None,
+    max_tokens: None,
+}).await?;
+```
+
+`Client::new()` reads `$SETU_BASE_URL` (defaults to `http://localhost:8000`) and `$SETU_API_KEY` from the environment; `.with_base_url()` / `.with_api_key()` override either explicitly.
+
+## Embeddings and models
+
+```rust
+client.embeddings().create(setu_gateway::EmbeddingRequest { model: "text-embedding-3-small".into(), input: "hello world".into() }).await?;
+client.models().list().await?;
+```
+
+## Not yet supported
+
+Streaming (`stream: true`) isn't implemented in this crate yet - use the [Python](/sdk/python) or [TypeScript](/sdk/typescript) SDK if you need server-sent-event streaming today. `chat().completions().create()`, `embeddings().create()`, and `models().list()` are fully implemented and covered by tests (mocked via [`wiremock`](https://docs.rs/wiremock), plus a live smoke test against a running gateway).
+
+## Verify
+
+```bash
+cargo build
+cargo test
+cargo clippy --all-targets
+```

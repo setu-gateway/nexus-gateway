@@ -1,0 +1,110 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.21.0
+  name: setugateways.setu.gateway.io
+spec:
+  group: setu.gateway.io
+  names:
+    kind: SetuGateway
+    listKind: SetuGatewayList
+    plural: setugateways
+    singular: setugateway
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.readyReplicas
+      name: Ready
+      type: integer
+    - jsonPath: .spec.version
+      name: Version
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: SetuGateway is the Schema for the setugateways API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: SetuGatewaySpec defines the desired state of a SetuGateway
+              deployment.
+            properties:
+              image:
+                description: Image is the container image repository, e.g. "ghcr.io/setu-gateway/gateway".
+                type: string
+              port:
+                default: 8000
+                description: Port is the container port the gateway listens on.
+                format: int32
+                type: integer
+              replicas:
+                default: 2
+                description: Replicas is the desired pod count.
+                format: int32
+                minimum: 1
+                type: integer
+              secretName:
+                description: |-
+                  SecretName is the Secret holding DATABASE_URL/REDIS_URL/JWT_SECRET/provider
+                  keys, in the same namespace as this SetuGateway. When its contents change,
+                  the operator rolls the Deployment's pods automatically (see
+                  internal/controller's secret-hash annotation) - this is the operator's
+                  "secret rotation" capability: update the Secret, the running pods pick it up
+                  without a manual restart.
+                type: string
+              version:
+                description: |-
+                  Version is the image tag to run. Changing this triggers a rolling upgrade -
+                  this is the operator's "auto upgrades" capability: edit one field, the
+                  running Deployment converges to it without a separate kubectl/helm step.
+                type: string
+            required:
+            - image
+            - secretName
+            - version
+            type: object
+          status:
+            description: |-
+              SetuGatewayStatus reflects the operator's most recent observation of the
+              Deployment it manages - this is the "health recovery" visibility capability:
+              a degraded Deployment shows up here, not just in a separate `kubectl get pods`.
+            properties:
+              observedGeneration:
+                format: int64
+                type: integer
+              observedSecretHash:
+                type: string
+              phase:
+                description: SetuGatewayPhase summarizes reconciliation status for
+                  `kubectl get`.
+                type: string
+              readyReplicas:
+                format: int32
+                type: integer
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

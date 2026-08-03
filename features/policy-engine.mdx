@@ -1,0 +1,50 @@
+---
+title: "Policy Engine"
+description: "Organization-wide guardrails enforced before a request is routed to a provider"
+---
+
+Policies are organization-wide rules enforced in `/v1/chat/completions` before routing picks a provider - a violation returns `403` with no upstream call ever made, not a warning logged after the fact.
+
+## Creating a policy
+
+Requires the `manage_policies` permission (granted to the `owner` and `admin` [roles](/api/authentication) by default - `developer`, `billing`, `security`, and `viewer` do not have it):
+
+```bash
+curl -X POST http://localhost:8000/policies \
+  -H "Content-Type: application/json" \
+  -d '{
+    "organization_id": "...",
+    "name": "no-untrusted-providers",
+    "policy_type": "provider_allowlist",
+    "config": {"providers": ["openai", "anthropic"]}
+  }'
+```
+
+## Policy types
+
+| `policy_type` | `config` shape | Effect |
+|---|---|---|
+| `provider_allowlist` | `{"providers": ["openai", ...]}` | Only listed providers may serve the request, including as a routing fallback |
+| `provider_denylist` | `{"providers": ["ollama", ...]}` | Listed providers are never used, including as a fallback |
+| `min_context_window` | `{"min_context_window": 32000}` | Rejects any candidate model below this context window |
+| `block_secrets` | none | Scans every message's text content for common secret patterns before the request is routed |
+
+`config` is validated eagerly at create/update time against this table - a malformed policy is rejected with `400` rather than silently no-op-ing the first time it's enforced.
+
+## What `block_secrets` actually catches
+
+Pattern-based, not an entropy scanner (`apps/gateway/policy/secrets.py`) - the same approach [gitleaks/trufflehog](https://github.com/gitleaks/gitleaks) use by default, chosen because generic entropy detectors false-positive constantly on ordinary hashes and base64 in real prompts. Recognizes AWS access keys, OpenAI/Anthropic API keys, GitHub tokens, Slack tokens, Stripe keys, Google API keys, PEM private-key blocks, JWT-shaped strings, and generic `password=`/`secret=`-style assignments. It's a guardrail against an accidental paste, not a DLP system - it will not catch a secret that doesn't match one of these known formats.
+
+## Enabling and disabling
+
+```bash
+curl -X PATCH http://localhost:8000/policies/{id} \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": false}'
+```
+
+A disabled policy is skipped during enforcement but not deleted - useful for temporarily lifting a guardrail without losing its configuration.
+
+## Multiple policies
+
+Every enabled policy for the organization is checked on every request; the first violation found raises. There's no priority/ordering between policies - each is an independent, unconditional guardrail, not a ranked rule set like [routing rules](/features/routing).

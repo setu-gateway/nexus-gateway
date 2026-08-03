@@ -74,6 +74,27 @@ async def _run_with_lock_retry(fn, *, attempts: int = 5, initial_delay: float = 
             delay *= 2
 
 
+async def retry_on_lock(fn, *, attempts: int = 5, initial_delay: float = 0.05):
+    """Same idea as _run_with_lock_retry above, for a plain synchronous callable (a
+    TestClient request) instead of an awaitable one - for a test's own mutating call
+    that can transiently race a fire-and-forget write (audit logging, etc.) from a
+    request made just before it, the same way this whole module's other locking
+    comments describe. Draining tracked background tasks first (drain_background_tasks)
+    closes most of that race already; this is the backstop for what's left - e.g. a
+    write from a source this process didn't happen to track, or one that started after
+    the drain's own poll loop already returned. Returns fn()'s result so callers can
+    still use the response (e.g. `resp = await retry_on_lock(lambda: client.delete(...))`)."""
+    delay = initial_delay
+    for attempt in range(attempts):
+        try:
+            return fn()
+        except OperationalError as e:
+            if "locked" not in str(e).lower() or attempt == attempts - 1:
+                raise
+            await asyncio.sleep(delay)
+            delay *= 2
+
+
 async def _get_test_db_session():
     async with TestSessionLocal() as session:
         try:

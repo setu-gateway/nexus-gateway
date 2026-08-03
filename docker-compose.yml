@@ -39,6 +39,14 @@ services:
       - .:/app
     restart: unless-stopped
 
+  website:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.website
+    ports:
+      - "3001:3001"
+    restart: unless-stopped
+
   redis:
     image: redis:7-alpine
     ports:

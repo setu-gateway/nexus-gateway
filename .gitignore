@@ -23,6 +23,24 @@ build/
 .turbo/
 *.tsbuildinfo
 
+# Go (SDK, Terraform provider, Kubernetes operator)
+/packages/sdk-go/setu-gateway-go
+/infrastructure/terraform-provider-setu/terraform-provider-setu
+/infrastructure/k8s-operator/k8s-operator
+
+# Rust (SDK)
+target/
+
+# Java (SDK)
+*.class
+*.jar
+!*-sources.jar
+
+# .NET (SDK)
+bin/
+obj/
+*.user
+
 # Env files
 .env
 .env.*

@@ -12,6 +12,7 @@ from apps.gateway.auth import KeyPermission, RequestAuthContext, resolve_auth_or
 from apps.gateway.cache import compute_cache_key
 from apps.gateway.db.models import CachePolicy
 from apps.gateway.db.session import get_db_session
+from apps.gateway.policy import PolicyViolation, enforce_policies
 from apps.gateway.providers.instance import (
     cache_manager,
     health_monitor,
@@ -293,6 +294,28 @@ async def chat_completions(
             ) from None
 
     request_id = str(uuid.uuid4())
+    if resolved_organization_id:
+        try:
+            await enforce_policies(
+                db,
+                organization_id=resolved_organization_id,
+                requested_model=req.model,
+                messages=[m.model_dump() for m in req.messages],
+                model_registry=model_registry,
+            )
+        except PolicyViolation as e:
+            timeline.mark("policy_blocked")
+            await record_request(
+                request_id=request_id,
+                requested_model=req.model,
+                status="error",
+                timeline=timeline,
+                organization_id=resolved_organization_id,
+                project_id=auth_context.project_id if auth_context else None,
+                error_message=str(e),
+            )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+
     try:
         decision = routing_engine.route(req.model, policy=policy_override, required_capability=required_capability, rules=org_rules)
         request_id = decision.request_id

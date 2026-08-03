@@ -4,8 +4,10 @@ import sys
 from typing import Any
 
 from packages.cli.benchmark import DEFAULT_MODEL_BY_PROVIDER, run_benchmark
+from packages.cli.certify import list_available_providers, render_report, run_certify
 from packages.cli.doctor import DoctorCheck, run_config_checks, run_doctor_checks
 from packages.cli.gateway_ops import clear_cache, fetch_health, fetch_providers, replay_prompt
+from packages.cli.marketplace import validate_manifest, validate_registry
 from packages.cli.report import render_benchmark_report, render_table
 
 DEFAULT_PROVIDERS = ["openai", "gemini", "groq", "ollama"]
@@ -53,6 +55,18 @@ def _build_parser() -> argparse.ArgumentParser:
     replay.add_argument("--model", default=None, help="Unified model id to resolve candidate providers from")
     replay.add_argument("--providers", default=None, help="Comma-separated explicit provider list, overriding --model resolution")
     replay.add_argument("--prompt", default="Summarize what an AI gateway does in one sentence.", help="Prompt to replay")
+
+    certify = subparsers.add_parser("certify", help="Run a provider plugin through the certification contract (Epic 7.4)")
+    certify.add_argument(
+        "provider", nargs="?", default=None, help="Provider name under plugins/providers/ (omit to list available providers)"
+    )
+
+    marketplace = subparsers.add_parser("marketplace", help="Plugin marketplace commands (Epic 7.3)")
+    marketplace_sub = marketplace.add_subparsers(dest="marketplace_command", required=True)
+    marketplace_validate = marketplace_sub.add_parser(
+        "validate", help="Validate marketplace/registry.json, or a single manifest file with --manifest"
+    )
+    marketplace_validate.add_argument("--manifest", default=None, help="Validate a single manifest JSON file instead of the registry")
 
     cache = subparsers.add_parser("cache", help="Cache management commands")
     cache_sub = cache.add_subparsers(dest="cache_command", required=True)
@@ -177,6 +191,50 @@ async def _run_replay_command(args: argparse.Namespace) -> int:
     return 0 if all(r["success"] for r in result.get("results", [])) else 1
 
 
+async def _run_certify_command(args: argparse.Namespace) -> int:
+    if not args.provider:
+        print("Available providers:")
+        for name in list_available_providers():
+            print(f"  {name}")
+        print("\nRun: setu certify <provider>")
+        return 0
+
+    try:
+        report = await run_certify(args.provider)
+    except ValueError as e:
+        print(str(e), file=sys.stderr)
+        return 1
+
+    print(render_report(report))
+    return 0 if report.certified else 1
+
+
+def _run_marketplace_validate_command(args: argparse.Namespace) -> int:
+    if args.manifest:
+        import json
+        from pathlib import Path
+
+        manifest = json.loads(Path(args.manifest).read_text())
+        errors = validate_manifest(manifest)
+        if errors:
+            print(f"'{args.manifest}' is INVALID:")
+            for e in errors:
+                print(f"  - {e}")
+            return 1
+        print(f"'{args.manifest}' is valid.")
+        return 0
+
+    results = validate_registry()
+    if not results:
+        print("marketplace/registry.json is valid.")
+        return 0
+    for name, errors in results.items():
+        print(f"'{name}' is INVALID:")
+        for e in errors:
+            print(f"  - {e}")
+    return 1
+
+
 async def _run_cache_clear_command(args: argparse.Namespace) -> int:
     try:
         result = await clear_cache(args.url, project_id=args.project_id)
@@ -205,6 +263,10 @@ def main(argv: list[str] | None = None) -> int:
         return _run_config_validate_command(args)
     if args.command == "replay":
         return asyncio.run(_run_replay_command(args))
+    if args.command == "certify":
+        return asyncio.run(_run_certify_command(args))
+    if args.command == "marketplace" and args.marketplace_command == "validate":
+        return _run_marketplace_validate_command(args)
     if args.command == "cache" and args.cache_command == "clear":
         return asyncio.run(_run_cache_clear_command(args))
 

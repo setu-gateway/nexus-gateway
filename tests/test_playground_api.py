@@ -42,3 +42,17 @@ def test_playground_completion_unsupported_provider():
 
     resp = client.post("/playground/completion", json=payload)
     assert resp.status_code == 530 or resp.status_code == 503 or resp.status_code == 500
+
+
+def test_playground_completion_is_rate_limited_per_ip():
+    from apps.gateway.api.playground_api import PLAYGROUND_RATE_LIMIT_PER_MINUTE
+
+    payload = {"provider": "openai", "model": "gpt-4o", "prompt": "spam"}
+
+    for _ in range(PLAYGROUND_RATE_LIMIT_PER_MINUTE):
+        resp = client.post("/playground/completion", json=payload)
+        assert resp.status_code == 200
+
+    limited = client.post("/playground/completion", json=payload)
+    assert limited.status_code == 429
+    assert "rate limit" in limited.json()["detail"].lower()

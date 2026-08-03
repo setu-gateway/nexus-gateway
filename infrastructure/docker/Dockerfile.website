@@ -1,0 +1,25 @@
+FROM node:20-alpine AS build
+
+WORKDIR /app
+
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml* ./
+COPY apps/website ./apps/website
+COPY packages ./packages
+
+RUN pnpm install --frozen-lockfile
+RUN pnpm --filter @setu/website build
+
+# Static output only - apps/website has no server-side code and no API calls of its
+# own (see src/main.tsx / src/App.tsx), unlike Dockerfile.dashboard's nginx stage
+# there's no /api/ proxy to configure here.
+FROM nginx:1.27-alpine AS serve
+
+COPY --from=build /app/apps/website/dist /usr/share/nginx/html
+COPY infrastructure/docker/nginx.website.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 3001
+
+HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget -qO- http://localhost:3001/ >/dev/null || exit 1

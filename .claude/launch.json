@@ -13,6 +13,19 @@
       "runtimeExecutable": ".venv/bin/python",
       "runtimeArgs": ["-m", "uvicorn", "apps.gateway.main:app", "--host", "0.0.0.0", "--port", "8000"],
       "port": 8000
+    },
+    {
+      "name": "website",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "apps/website", "run", "dev", "--", "--host"],
+      "port": 3001,
+      "autoPort": true
+    },
+    {
+      "name": "docs",
+      "runtimeExecutable": "mint",
+      "runtimeArgs": ["dev", "--port", "3333"],
+      "port": 3333
     }
   ]
 }

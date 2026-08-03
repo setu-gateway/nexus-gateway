@@ -1,0 +1,49 @@
+---
+title: "Go SDK"
+description: "Integration guide for Go applications."
+---
+
+Source: `packages/sdk-go`, module `github.com/setu-gateway/setu-gateway-go`.
+
+## Install
+
+```bash
+go get github.com/setu-gateway/setu-gateway-go
+```
+
+## Usage
+
+```go
+import setu "github.com/setu-gateway/setu-gateway-go"
+
+client := setu.NewClient(setu.WithAPIKey("sk_setu_..."))
+resp, err := client.Chat.Completions.Create(ctx, setu.ChatCompletionRequest{
+    Model:    "gpt-4o",
+    Messages: []setu.Message{{Role: "user", Content: "hi"}},
+})
+```
+
+`WithAPIKey` / `WithBaseURL` are optional functional options; when omitted they fall back to the `$SETU_API_KEY` / `$SETU_BASE_URL` environment variables, matching every other Setu SDK.
+
+## Embeddings and models
+
+```go
+client.Embeddings.Create(ctx, setu.EmbeddingRequest{Model: "text-embedding-3-small", Input: "hello world"})
+client.Models.List(ctx)
+```
+
+## Errors
+
+Non-2xx responses surface as a typed error carrying the gateway's status code and error detail; a transport-level failure (gateway unreachable) surfaces as a separate connection error. See `packages/sdk-go/errors.go`.
+
+## Not yet supported
+
+Streaming (`stream: true`) isn't implemented in this SDK yet - use the [Python](/sdk/python) or [TypeScript](/sdk/typescript) SDK if you need server-sent-event streaming today. `Chat.Completions.Create`, `Embeddings.Create`, and `Models.List` are fully implemented and covered by tests, including a live smoke test against a running gateway.
+
+## Verify
+
+```bash
+go build ./...
+go vet ./...
+go test ./...
+```

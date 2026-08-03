@@ -1,0 +1,71 @@
+---
+title: "Terraform Provider"
+description: "Manage organizations, projects, and API keys declaratively"
+---
+
+`infrastructure/terraform-provider-setu` manages Setu Gateway projects and API keys as Terraform resources, authenticating the same way the dashboard login does.
+
+```hcl
+terraform {
+  required_providers {
+    setu = {
+      source = "setu-gateway/setu"
+    }
+  }
+}
+
+provider "setu" {
+  endpoint = "https://gateway.your-domain.com" # or $SETU_ENDPOINT
+  email    = "you@example.com"                 # or $SETU_EMAIL
+  password = "..."                              # or $SETU_PASSWORD
+}
+
+resource "setu_project" "prod" {
+  name            = "production"
+  organization_id = "your-org-uuid"
+}
+
+resource "setu_api_key" "backend" {
+  name       = "backend-service"
+  project_id = setu_project.prod.id
+}
+
+output "backend_key" {
+  value     = setu_api_key.backend.key
+  sensitive = true
+}
+```
+
+The provider authenticates via `POST /auth/login` - this is a dashboard-user credential (email + password), not a scoped API key. `setu_api_key.key`'s plaintext value is only ever populated at creation time, since the gateway never returns a plaintext key again after that - write it to a real secret store before the next `apply` touches this resource, or a subsequent plan will show it as needing replacement with no way to recover the old value.
+
+## `setu_api_key` is immutable
+
+Every attribute on `setu_api_key` other than its Terraform-only metadata forces replacement (`RequiresReplace`) on change - there's no API-key "update" endpoint to map a Terraform update onto, so changing a key's name or project means Terraform destroying the old key and creating a new one, not editing it in place. Plan accordingly: a `terraform apply` that touches `setu_api_key.backend.name` will issue a brand-new key.
+
+## Not yet published to the Terraform Registry
+
+Publishing requires a registry account and GPG-signed releases - a maintainers' decision, not something built speculatively here. Build and use it locally in the meantime:
+
+```bash
+go build -o terraform-provider-setu .
+```
+
+Then point Terraform at the local binary with a [dev overrides](https://developer.hashicorp.com/terraform/cli/config/config-file#development-overrides-for-provider-developers) block in your CLI config:
+
+```hcl
+provider_installation {
+  dev_overrides {
+    "setu-gateway/setu" = "/path/to/this/directory"
+  }
+  direct {}
+}
+```
+
+## Verified
+
+Built and `go vet`-clean, and exercised through a full live cycle against a real running gateway during development: `terraform plan` → `apply` → a second `plan` confirming zero drift → `destroy`, using the dev-overrides setup above. Re-verified after dependency upgrades that fixed real CVEs (`govulncheck`-flagged transitive `grpc`/`x/text`/`x/net` versions).
+
+```bash
+go build ./...
+go vet ./...
+```

@@ -1,0 +1,60 @@
+---
+title: "Plugin Marketplace"
+description: "Manifest schema, local registry, and sandboxed execution for third-party plugins"
+---
+
+The marketplace (`marketplace/`) is a **skeleton today, not a live hosted service**: a manifest schema, a local registry file, a CLI validator, and (since this pass) a real execution sandbox - but no public submission workflow yet. Publishing `registry.json` somewhere fetchable and building a submission-review pipeline both need a hosting/moderation decision this skeleton deliberately doesn't make on its own; see [`marketplace/DESIGN.md`](https://github.com/setu-gateway/nexus-gateway/blob/main/marketplace/DESIGN.md) for the full reasoning.
+
+## Manifest schema
+
+Every entry in `registry.json` validates against [`plugin-manifest.schema.json`](https://github.com/setu-gateway/nexus-gateway/blob/main/marketplace/schema/plugin-manifest.schema.json):
+
+```json
+{
+  "name": "my-vector-db-provider",
+  "displayName": "My Vector DB Provider",
+  "category": "vector-databases",
+  "version": "1.0.0",
+  "author": "you",
+  "license": "Apache-2.0",
+  "repository": "https://github.com/you/my-vector-db-provider",
+  "entryPoint": "my_plugin.provider.MyProviderPlugin",
+  "description": "...",
+  "setuVersion": ">=0.2.0"
+}
+```
+
+`category` is one of `providers`, `authentication`, `analytics`, `caching`, `billing`, `routing-policies`, `notifications`, `storage`, `vector-databases`. The registry only ever stores the manifest - the plugin's actual code lives in the author's own `repository`, never copied into this repo.
+
+## Validating a manifest
+
+```bash
+setu marketplace validate                        # validates the whole registry.json
+setu marketplace validate --manifest my-plugin.json   # validates one manifest file
+```
+
+Checks schema conformance and (across the full registry) rejects duplicate `name`s.
+
+## Certification for provider plugins
+
+A `category: providers` manifest is expected to carry a `certification` block, populated by [`setu certify`](/plugins/provider-certification) - not written by the plugin author. An uncertified provider plugin doesn't get listed once the registry is actually hosted.
+
+## Sandboxed execution
+
+`apps/gateway/plugins/sandbox.py`'s `SandboxedPluginRunner` runs a plugin's hooks in an isolated subprocess with a wall-clock timeout, a CPU-time limit, and (on Linux) a memory ceiling - verified against real misbehaving plugins (an infinite loop, a memory bomb, a plugin that crashes) plus the real bundled `hello_world` plugin, in `tests/test_plugin_sandbox.py`.
+
+**What it does and doesn't solve, honestly:**
+
+- **Does** stop a hung, memory-hungry, or crashing plugin from taking the gateway process down with it - enforced at the OS process boundary, not by trusting the plugin's own code.
+- **Does not** stop a plugin process from making its own outbound network calls - full egress control needs OS-level enforcement (network namespaces, an egress proxy allowlist) that a subprocess boundary alone can't provide. A malicious plugin can still exfiltrate data over the network; it can no longer do so by corrupting the host process.
+- The memory ceiling (`RLIMIT_AS`) only works on Linux - verified that macOS's kernel unconditionally rejects setting it, so on macOS the sandbox falls back to CPU-time + wall-clock + process isolation without a hard memory cap. Linux, what the gateway's own Docker image ships on, supports it fully.
+- **Not yet wired to anything**: there is no live "install a marketplace plugin" pipeline for it to sandbox, since that pipeline is itself one of the things still blocked on a hosting decision. The default [`PluginLoader`](/plugins/overview) still runs bundled plugins in-process, which is fine for reviewed, first-party code - the sandbox is the intended execution path once third-party installs exist.
+
+## What's built vs. what needs a hosting decision
+
+| Built now | Needs a hosting decision first |
+| --- | --- |
+| Manifest schema | A place to host `registry.json` publicly |
+| Local registry file + example entries | A registry-repo PR submission workflow + CI wiring |
+| `setu marketplace validate` CLI command | A dashboard UI to browse/install listed plugins |
+| Subprocess-sandboxed plugin execution | An actual "install a marketplace plugin" pipeline for the sandbox to run |

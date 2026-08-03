@@ -1,0 +1,46 @@
+---
+title: "Provider Certification"
+description: "Running a provider plugin through the certification contract"
+---
+
+`setu certify` runs a [`ProviderPlugin`](/plugins/overview) through six checks and reports whether it's fit to list as `category: providers` in the [marketplace](/plugins/marketplace). It exists so "does this provider plugin actually work" doesn't rely on a maintainer reading the code by hand for every submission.
+
+```bash
+setu certify                # no args: lists provider plugins discoverable under plugins/providers/
+setu certify openai
+```
+
+```
+Certification report for 'openai':
+
+  [PASS] chat
+  [PASS] streaming
+  [PASS] embeddings
+  [PASS] retry
+  [PASS] health
+  [PASS] authentication
+
+Result: CERTIFIED
+Badge:  ![Setu Gateway Certified](https://img.shields.io/badge/setu--gateway-certified-brightgreen)
+```
+
+## The six checks
+
+| Check | What it verifies | Behavioral or structural |
+|---|---|---|
+| `chat` | `chat()` returns a non-empty response | Behavioral - calls the plugin |
+| `streaming` | `chat(stream=True)` returns something | Behavioral - calls the plugin |
+| `embeddings` | `embeddings()` returns a non-empty response | Behavioral - calls the plugin |
+| `retry` | `chat()`'s source references the shared retry helper | Structural - inspects source, doesn't inject a real failure |
+| `health` | `health()` returns a recognized status (`ok`/`degraded`/`offline`) | Behavioral - calls the plugin |
+| `authentication` | The plugin has an `api_key`/`token`/`credentials` attribute | Structural - a provider with no credential concept has nothing to certify here |
+
+`certified` is `true` only if every check passes - there's no partial-credit certification. The `retry` and `authentication` checks are deliberately structural rather than behavioral: forcing a real transient failure to observe a retry, or forcing real auth to fail, would need network-level fault injection specific to each provider's API. Checking that the code path exists is the same approach every provider plugin already follows.
+
+## Why this works without real API keys
+
+Every built-in provider plugin falls back to a deterministic mock response when no API key is configured (see the main [Quickstart](/getting-started/quickstart)) - so certification runs identically in CI, in local development, and against a real credentialed provider. This is also why `ollama` correctly *fails* the `authentication` check when certified: Ollama genuinely has no API key concept, so the check reports it accurately rather than assuming every provider must have one.
+
+## Using the result
+
+The `certification` block in a marketplace manifest (`checked`, `checkedAt`, per-check detail) is meant to be populated by this tool's output, not hand-written by a plugin author - see [Plugin Marketplace](/plugins/marketplace#certification-for-provider-plugins). A previously-certified plugin whose repository starts failing certification later (a regression, an abandoned dependency) is meant to be flagged via a re-run, not silently trusted forever.

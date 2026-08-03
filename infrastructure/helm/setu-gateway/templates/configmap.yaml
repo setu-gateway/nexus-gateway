@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "setu-gateway.gatewayName" . }}-config
+  labels:
+    {{- include "setu-gateway.labels" . | nindent 4 }}
+data:
+  SERVICE_NAME: {{ .Values.gateway.env.serviceName | quote }}
+  ENVIRONMENT: {{ .Values.gateway.env.environment | quote }}
+  PORT: {{ .Values.gateway.service.port | quote }}
+  LOG_LEVEL: {{ .Values.gateway.env.logLevel | quote }}
+  JWT_ALGORITHM: {{ .Values.gateway.env.jwtAlgorithm | quote }}
+  ACCESS_TOKEN_EXPIRE_MINUTES: {{ .Values.gateway.env.accessTokenExpireMinutes | quote }}
+  REFRESH_TOKEN_EXPIRE_DAYS: {{ .Values.gateway.env.refreshTokenExpireDays | quote }}
+  # Total concurrent DB connections this pod will hold is DB_POOL_SIZE + DB_MAX_OVERFLOW -
+  # multiply by replicaCount when sizing Postgres's own max_connections (see PERFORMANCE.md).
+  DB_POOL_SIZE: {{ .Values.gateway.env.dbPoolSize | quote }}
+  DB_MAX_OVERFLOW: {{ .Values.gateway.env.dbMaxOverflow | quote }}
+  DB_POOL_TIMEOUT_SECONDS: {{ .Values.gateway.env.dbPoolTimeoutSeconds | quote }}

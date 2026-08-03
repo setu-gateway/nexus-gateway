@@ -1,0 +1,15 @@
+# Serves marketplace/registry.json and its schema as plain static files - the
+# simplest possible "hosted registry" per marketplace/DESIGN.md, for anyone who
+# wants it independent of GitHub's own raw-content hosting (see
+# DEPLOYMENT_RUNBOOK.md's marketplace section for the zero-infrastructure
+# alternative, which needs neither this image nor a new domain).
+FROM nginx:1.27-alpine
+
+COPY marketplace/registry.json /usr/share/nginx/html/registry.json
+COPY marketplace/schema/ /usr/share/nginx/html/schema/
+COPY infrastructure/docker/nginx.marketplace.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 3002
+
+HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget -qO- http://localhost:3002/registry.json >/dev/null || exit 1

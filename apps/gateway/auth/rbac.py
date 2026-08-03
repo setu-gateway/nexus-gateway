@@ -24,6 +24,7 @@ class Permission(str, Enum):
     RUN_EVALUATIONS = "run_evaluations"
     MANAGE_MCP_SERVERS = "manage_mcp_servers"
     VIEW_AUDIT_LOG = "view_audit_log"
+    MANAGE_POLICIES = "manage_policies"
 
 
 ROLE_PERMISSIONS: dict[Role, set[Permission]] = {
@@ -41,6 +42,7 @@ ROLE_PERMISSIONS: dict[Role, set[Permission]] = {
         Permission.RUN_EVALUATIONS,
         Permission.MANAGE_MCP_SERVERS,
         Permission.VIEW_AUDIT_LOG,
+        Permission.MANAGE_POLICIES,
     },
     Role.ADMIN: {
         Permission.CREATE_PROJECT,
@@ -55,6 +57,7 @@ ROLE_PERMISSIONS: dict[Role, set[Permission]] = {
         Permission.RUN_EVALUATIONS,
         Permission.MANAGE_MCP_SERVERS,
         Permission.VIEW_AUDIT_LOG,
+        Permission.MANAGE_POLICIES,
     },
     Role.DEVELOPER: {
         Permission.CREATE_PROJECT,
